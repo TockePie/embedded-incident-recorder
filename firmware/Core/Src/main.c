@@ -62,7 +62,10 @@ static void MX_SPI2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+int _write(int fd, char *p, int n) {
+  HAL_UART_Transmit(&huart2, (uint8_t*)p, n, HAL_MAX_DELAY);
+  return n;
+}
 /* USER CODE END 0 */
 
 /**
@@ -105,6 +108,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    printf("hello from STM32, tick: %lu\r\n", HAL_GetTick());
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

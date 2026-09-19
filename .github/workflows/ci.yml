@@ -1,0 +1,37 @@
+name: CI Build Check
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.pdf'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.pdf'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker toolchain image
+        run: docker build -t stm32-build docker/
+
+      - name: Build firmware
+        run: make build
+
+      - name: Verify build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            firmware/build/*.bin
+            firmware/build/*.elf
+            firmware/build/*.hex
+          if-no-files-found: error

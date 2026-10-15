@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <bringup.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -106,8 +107,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
+    app_bringup_run();
+    HAL_Delay(100);
     HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
     printf("hello from STM32, tick: %lu\r\n", HAL_GetTick());
     HAL_Delay(1000);

@@ -2,6 +2,7 @@
 #include "bus_interface.h"
 #include "bus_adapters.h"
 #include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_tim.h"
 
 extern UART_HandleTypeDef huart2;
 extern TIM_HandleTypeDef htim3;

@@ -160,7 +160,7 @@ DMA mapping для `TIM3_CH4` визначений у **RM0383 Table 27**. Ві�
 | Мікросхема  | Функція                       | Стан адресних входів                                    | 7-бітна I²C-адреса | Байт адреси на шині: запис / читання | Регістр ідентифікації | Очікуване значення ID | Джерело                                                                                                               |
 | ----------- | ----------------------------- | ------------------------------------------------------- | ------------------ | ------------------------------------ | --------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **LSM303D** | Акселерометр і магнітометр    | `CS1 = High`; `SD0/SA0 = High`                          | `0x1D`             | `0x3A / 0x3B`                        | `WHO_AM_I`, `0x0F`    | `0x49`                | [LSM303D datasheet, Table 11, p. 22; Table 19, p. 31](https://www.st.com/resource/en/datasheet/lsm303d.pdf)           |
-| **L3GD20H** | Гіроскоп                      | `CS2 = High`; спільний `SD0/SA0 = High`                 | `0x6B`             | `0xD6 / 0xD7`                        | `WHO_AM_I`, `0x0F`    | `0xD7`                | [L3GD20H datasheet, Table 12, p. 28; Table 18, p. 36](https://www.pololu.com/file/0J731/L3GD20H.pdf)                  |
+| **L3GD20H** | Гіроскоп                      | `CS2 = High`; спільний `SD0/SA0 = High`                 | `0x6B`             | `0xD6 / 0xD7`                        | `WHO_AM_I`, `0x0F`    | `0xD4`                | [L3GD20H datasheet, Table 12, p. 28; Table 18, p. 36](https://www.pololu.com/file/0J731/L3GD20H.pdf)                  |
 | **BMP180**  | Барометр і датчик температури | Адреса фіксована; зовнішні адресні входи не передбачені | `0x77`             | `0xEE / 0xEF`                        | `CHIP_ID`, `0xD0`     | `0x55`                | [BMP180 datasheet, Table 7, p. 20; Figure 6, p. 18](https://cdn-shop.adafruit.com/datasheets/BST-BMP180-DS000-09.pdf) |
 
 Усі три адреси на `I2C1` різні: `0x1D`, `0x6B` та `0x77`. **Конфлікту адрес у прийнятій конфігурації немає.**
@@ -194,12 +194,12 @@ DMA mapping для `TIM3_CH4` визначений у **RM0383 Table 27**. Ві�
 | Байт адреси для запису       | `0x42`                                     | [OV7670 Implementation Guide, §8, p. 44](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf)        |
 | Байт адреси для читання      | `0x43`                                     | [OV7670 Implementation Guide, §8, p. 44](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf)        |
 | Регістр PID                  | `0x0A`, очікуване значення `0x76`          | [OV7670 Implementation Guide, Table 8-2, p. 46](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf) |
-| Регістр VER                  | `0x0B`, очікуване значення `0x70`          | [OV7670 Implementation Guide, Table 8-2, p. 46](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf) |
+| Регістр VER                  | `0x0B`, очікуване значення `0x73`          | [OV7670 Implementation Guide, Table 8-2, p. 46](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf) |
 
 Ідентифікація камери виконується читанням двох регістрів:
 
 * `PID` (`0x0A`) — очікуване значення `0x76`;
-* `VER` (`0x0B`) — очікуване значення `0x70`.
+* `VER` (`0x0B`) — очікуване значення `0x73`.
 
 Ці значення визначені в Table 8-2 документа OmniVision *OV7670/OV7171 CMOS VGA CameraChip Implementation Guide*. Вони використовуються як критерій перевірки підключеної камери, а не як значення, яке слід записувати в регістри.
 
@@ -210,7 +210,7 @@ DMA mapping для `TIM3_CH4` визначений у **RM0383 Table 27**. Ві�
 1. Переконатися, що камера вийшла із зовнішнього стану скидання, а на `XCLK` подається тактовий сигнал.
 2. Через SCCB записати `0x80` у регістр `COM7` (`0x12`), використовуючи адресу запису `0x42`.
 3. Почекати щонайменше `1 ms`, як зазначено в Implementation Guide.
-4. Прочитати `PID` (`0x0A`) та `VER` (`0x0B`) і порівняти їх з очікуваними значеннями `0x76` та `0x70` відповідно.
+4. Прочитати `PID` (`0x0A`) та `VER` (`0x0B`) і порівняти їх з очікуваними значеннями `0x76` та `0x73` відповідно.
 
 Джерело послідовності скидання: [OV7670 Implementation Guide, §8.1.1, p. 44](https://www.haoyuelectronics.com/Attachment/OV7670%20%2B%20AL422B%28FIFO%29%20Camera%20Module%28V2.0%29/OV7670%20Implementation%20Guide%20%28V1.0%29.pdf).
 

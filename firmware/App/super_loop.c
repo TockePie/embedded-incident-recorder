@@ -6,16 +6,20 @@ __attribute__((weak)) void Metrics_OnLoopEnd(void) {}
 __attribute__((weak)) void Metrics_OnTaskStart(SuperLoop_TaskID_t task_id) { (void)task_id; }
 __attribute__((weak)) void Metrics_OnTaskEnd(SuperLoop_TaskID_t task_id) { (void)task_id; }
 
-static void Task_ProcessUART(void) {
-}
-
-static void Task_ReadSensors(void) {
-}
-
-static void Task_CameraPoll(void) {
-}
+static void Task_ProcessUART(void) {}
+static void Task_ReadSensors(void) {}
+static void Task_CameraPoll(void) {}
 
 static void Task_FlashFlush(void) {
+    static uint8_t flash_step = 0;
+    switch (flash_step) {
+        case 0:
+            flash_step = 1;
+            break;
+        case 1:
+            flash_step = 0;
+            break;
+    }
 }
 
 static void Task_HeartbeatLED(void) {
@@ -34,7 +38,6 @@ static SuperLoop_Task_t g_tasks[TASK_COUNT] = {
 
 void SuperLoop_Init(void) {
     uint32_t current_time = HAL_GetTick();
-    
     for (int i = 0; i < TASK_COUNT; i++) {
         g_tasks[i].last_run_ms = current_time;
     }
@@ -49,27 +52,23 @@ void SuperLoop_EnableTask(SuperLoop_TaskID_t task_id, bool enable) {
 void SuperLoop_Run(void) {
     while (1) {
         Metrics_OnLoopStart();
-        
         uint32_t now = HAL_GetTick();
 
         for (int i = 0; i < TASK_COUNT; i++) {
             SuperLoop_Task_t *task = &g_tasks[i];
-
-            if (!task->enabled) {
+            if (!task->enabled || task->function == NULL) {
                 continue;
             }
 
-            if (task->period_ms == 0 || (now - task->last_run_ms >= task->period_ms)) {
+            if (task->period_ms == 0 || ((uint32_t)(now - task->last_run_ms) >= task->period_ms)) {
                 Metrics_OnTaskStart(task->id);
                 
                 task->function();
                 
                 Metrics_OnTaskEnd(task->id);
-
                 task->last_run_ms = now;
             }
         }
-
         Metrics_OnLoopEnd();
     }
 }

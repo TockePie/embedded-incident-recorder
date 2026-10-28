@@ -1,5 +1,6 @@
 #include "super_loop.h"
 #include "main.h"
+#include "drivers_stub.h"
 
 __attribute__((weak)) void Metrics_OnLoopStart(void) {}
 __attribute__((weak)) void Metrics_OnLoopEnd(void) {}

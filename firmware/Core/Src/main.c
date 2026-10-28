@@ -23,6 +23,9 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "bringup.h"
+#include "metrics.h"
+#include "super_loop.h"
+#include "drivers_stub.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,7 +95,8 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  perf_init();
+  stack_paint();
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -112,6 +116,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   app_bringup_init();
   setvbuf(stdout, NULL, _IONBF, 0);
+  perf_init();
+  stack_paint();
+  metrics_init();
+  metrics_probe_set(1);
+  Drivers_InitAll();
+  SuperLoop_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -120,6 +130,7 @@ int main(void)
   while (1)
   {
     app_bringup_run();
+    SuperLoop_Run();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -443,6 +454,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(CAM_SDA_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

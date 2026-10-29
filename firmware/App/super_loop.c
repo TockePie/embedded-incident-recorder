@@ -1,4 +1,5 @@
 #include "super_loop.h"
+#include "drivers_stub.h"
 #include "main.h"
 
 __attribute__((weak)) void Metrics_OnLoopStart(void) {}
@@ -6,9 +7,19 @@ __attribute__((weak)) void Metrics_OnLoopEnd(void) {}
 __attribute__((weak)) void Metrics_OnTaskStart(SuperLoop_TaskID_t task_id) { (void)task_id; }
 __attribute__((weak)) void Metrics_OnTaskEnd(SuperLoop_TaskID_t task_id) { (void)task_id; }
 
-static void Task_ProcessUART(void) {}
-static void Task_ReadSensors(void) {}
-static void Task_CameraPoll(void) {}
+static SensorData_t g_latest_sensor_data;
+static uint8_t g_last_uart_char = 0;
+
+static void Task_ProcessUART(void) {
+    Drivers_UART_ProcessRxChar(g_last_uart_char);
+}
+
+static void Task_ReadSensors(void) {
+    Drivers_Sensors_ReadData(&g_latest_sensor_data);
+}
+
+static void Task_CameraPoll(void) {
+}
 
 static void Task_FlashFlush(void) {
     static uint8_t flash_step = 0;
@@ -29,7 +40,7 @@ static void Task_HeartbeatLED(void) {
 }
 
 static SuperLoop_Task_t g_tasks[TASK_COUNT] = {
-    [TASK_ID_UART_RX]   = { TASK_ID_UART_RX,   "UART_Process", Task_ProcessUART,   0,   0, true },
+    [TASK_ID_UART_RX]   = { TASK_ID_UART_RX,   "UART_Process", Task_ProcessUART,   10,  0, true },
     [TASK_ID_SENSORS]   = { TASK_ID_SENSORS,   "Sensors_Read", Task_ReadSensors,   100, 0, true },
     [TASK_ID_CAMERA]    = { TASK_ID_CAMERA,    "Camera_Poll",  Task_CameraPoll,    50,  0, true },
     [TASK_ID_FLASH_LOG] = { TASK_ID_FLASH_LOG, "Flash_Flush",  Task_FlashFlush,    500, 0, true },
@@ -37,6 +48,7 @@ static SuperLoop_Task_t g_tasks[TASK_COUNT] = {
 };
 
 void SuperLoop_Init(void) {
+    Drivers_InitAll();
     uint32_t current_time = HAL_GetTick();
     for (int i = 0; i < TASK_COUNT; i++) {
         g_tasks[i].last_run_ms = current_time;

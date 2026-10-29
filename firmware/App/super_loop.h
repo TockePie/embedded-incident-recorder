@@ -31,6 +31,7 @@ typedef struct {
 void SuperLoop_Init(void);
 void SuperLoop_Run(void);
 void SuperLoop_EnableTask(SuperLoop_TaskID_t task_id, bool enable);
+void SuperLoop_OnUartRxChar(uint8_t c);
 
 #ifdef __cplusplus
 }

@@ -1,34 +1,35 @@
 #include "super_loop.h"
 #include "drivers_stub.h"
 #include "main.h"
+#include <stddef.h>
 
 __attribute__((weak)) void Metrics_OnLoopStart(void) {}
 __attribute__((weak)) void Metrics_OnLoopEnd(void) {}
 __attribute__((weak)) void Metrics_OnTaskStart(SuperLoop_TaskID_t task_id) { (void)task_id; }
 __attribute__((weak)) void Metrics_OnTaskEnd(SuperLoop_TaskID_t task_id) { (void)task_id; }
 
-static SensorData_t g_latest_sensor_data;
-static uint8_t g_last_uart_char = 0;
+static SensorData_t g_current_sensor_data;
+static uint8_t g_flash_buffer[32];
 
 static void Task_ProcessUART(void) {
-    Drivers_UART_ProcessRxChar(g_last_uart_char);
 }
 
 static void Task_ReadSensors(void) {
-    Drivers_Sensors_ReadData(&g_latest_sensor_data);
+    Drivers_Sensors_ReadData(&g_current_sensor_data);
 }
 
 static void Task_CameraPoll(void) {
 }
 
 static void Task_FlashFlush(void) {
-    static uint8_t flash_step = 0;
-    switch (flash_step) {
+    static uint8_t flash_fsm_state = 0;
+    switch (flash_fsm_state) {
         case 0:
-            flash_step = 1;
+            flash_fsm_state = 1;
             break;
         case 1:
-            flash_step = 0;
+            Drivers_Flash_WriteChunk(g_flash_buffer, sizeof(g_flash_buffer));
+            flash_fsm_state = 0;
             break;
     }
 }
@@ -59,6 +60,10 @@ void SuperLoop_EnableTask(SuperLoop_TaskID_t task_id, bool enable) {
     if (task_id < TASK_COUNT) {
         g_tasks[task_id].enabled = enable;
     }
+}
+
+void SuperLoop_OnUartRxChar(uint8_t c) {
+    Drivers_UART_ProcessRxChar(c);
 }
 
 void SuperLoop_Run(void) {

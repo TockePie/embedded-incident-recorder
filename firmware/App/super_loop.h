@@ -4,36 +4,19 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define SENSOR_POLL_PERIOD_US   (10000u)   
+#define STATS_REPORT_PERIOD_US  (2000000u) 
 
 typedef enum {
-    TASK_ID_UART_RX = 0,
-    TASK_ID_SENSORS,
-    TASK_ID_CAMERA,
-    TASK_ID_FLASH_LOG,
-    TASK_ID_HEARTBEAT,
-    TASK_COUNT
-} SuperLoop_TaskID_t;
-
-typedef void (*TaskFunction_t)(void);
-
-typedef struct {
-    SuperLoop_TaskID_t id;
-    const char*        name;
-    TaskFunction_t     function;
-    uint32_t           period_ms;
-    uint32_t           last_run_ms;
-    bool               enabled;
-} SuperLoop_Task_t;
+    STATE_IDLE = 0,
+    STATE_TRIGGERED,
+    STATE_CAPTURING,
+    STATE_SAVING_TO_FLASH,
+    STATE_ERROR
+} AppState_t;
 
 void SuperLoop_Init(void);
 void SuperLoop_Run(void);
-void SuperLoop_EnableTask(SuperLoop_TaskID_t task_id, bool enable);
+void SuperLoop_OnGPIO_Interrupt(uint16_t pin);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif 

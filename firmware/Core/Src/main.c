@@ -28,6 +28,13 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app/app.h"
+#include "metrics/metrics.h"
+#include "metrics/memory_metrics.h"
+#include "metrics/metrics_config.h"
+#if (METRICS_ENABLE_STARTUP_SELF_TEST != 0U)
+#include "metrics/metrics_test.h"
+volatile uint32_t g_metrics_test_result;
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,6 +74,8 @@ void SystemClock_Config(void);
  * @retval int
  */
 int main(void) {
+	/* Paint the reserved MSP stack before HAL/application initialization. */
+	MemoryMetrics_StackPaint();
 
 	/* USER CODE BEGIN 1 */
 
@@ -90,6 +99,8 @@ int main(void) {
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
+	/* Reserved measurement outputs: PA4, PB0, PB1 and PB10. */
+	(void) Metrics_ProbeInit();
 	MX_DMA_Init();
 	MX_I2C1_Init();
 	MX_SPI2_Init();
@@ -101,13 +112,26 @@ int main(void) {
 	/* USER CODE BEGIN 2 */
 	/* Start application services after all hardware peripherals are initialized. */
 	App_Init();
+	/* Initialize metrics only after App_Init(): camera initialization may
+	 * reset DWT->CYCCNT for its own microsecond delays. */
+	if (!Metrics_Init()) {
+		Error_Handler();
+	}
+#if (METRICS_ENABLE_STARTUP_SELF_TEST != 0U)
+	g_metrics_test_result = MetricsTest_Run();
+#endif
 	/* USER CODE END 2 */
 
 	/* Keep the cooperative application loop running continuously. */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
+		/* Measure one complete cooperative super-loop iteration. */
+		Metrics_LoopBegin();
 		/* Advance camera capture, sensor processing, and scheduled services. */
 		App_RunOnce();
+		Metrics_LoopEnd();
+		/* Extend the 32-bit DWT counter before it can wrap. */
+		Metrics_Poll();
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */

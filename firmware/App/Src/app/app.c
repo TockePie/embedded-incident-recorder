@@ -1,6 +1,7 @@
 #include "app/app.h"
 
 #include "app/app_scheduler.h"
+#include "metrics/metrics.h"
 #include "app/app_state.h"
 #include "bsp/diag_uart.h"
 #include "bsp/user_button.h"
@@ -45,6 +46,9 @@ static void AppTask_Button(uint32_t now_ms, void *context) {
 	(void) context;
 
 	if (UserButton_Process(now_ms)) {
+		Metrics_ProbeSet(METRICS_PROBE_BUTTON, true);
+		(void) Metrics_EventPush(METRICS_EVENT_BUTTON_PRESS,
+				(uint32_t) AppState_Get(&s_state_manager));
 		/* Keep the system DISARMED while a Flash save/erase is in progress.
 		 AppState_RequestToggle() independently rejects requests in FAULT. */
 		if ((ConfigService_GetSaveStatus() != CONFIG_SAVE_IN_PROGRESS)
@@ -52,13 +56,23 @@ static void AppTask_Button(uint32_t now_ms, void *context) {
 				&& (CliService_IsMaintenanceLocked() == false)) {
 			AppState_RequestToggle(&s_state_manager);
 		}
+		Metrics_ProbeSet(METRICS_PROBE_BUTTON, false);
 	}
 }
 
 static void AppTask_StateManager(uint32_t now_ms, void *context) {
+	AppState_t previous_state;
+	AppState_t current_state;
 	(void) now_ms;
 	(void) context;
+	previous_state = AppState_Get(&s_state_manager);
 	AppState_Process(&s_state_manager);
+	current_state = AppState_Get(&s_state_manager);
+	if (current_state != previous_state) {
+		const uint32_t argument = ((uint32_t) previous_state << 16U)
+				| (uint32_t) current_state;
+		(void) Metrics_EventPush(METRICS_EVENT_STATE_CHANGE, argument);
+	}
 }
 
 static void AppTask_Led(uint32_t now_ms, void *context) {
@@ -103,37 +117,44 @@ static void AppTask_HealthMonitor(uint32_t now_ms, void *context) {
 
 static bool App_RegisterTasks(uint32_t now_ms) {
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Button, NULL,
-	APP_TASK_BUTTON_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_BUTTON_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_BUTTON) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_StateManager, NULL,
-	APP_TASK_STATE_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_STATE_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_STATE_MANAGER) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Led, NULL,
-	APP_TASK_LED_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_LED_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_LED) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_CLI, NULL,
-	APP_TASK_CLI_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_CLI_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_CLI) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Config, NULL,
-	APP_TASK_CONFIG_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_CONFIG_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_CONFIG) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Journal, NULL,
-	APP_TASK_JOURNAL_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_JOURNAL_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_JOURNAL) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_HealthMonitor, NULL,
-	APP_TASK_HEALTH_PERIOD_MS, now_ms) != APP_SCHEDULER_OK) {
+	APP_TASK_HEALTH_PERIOD_MS, now_ms,
+			METRICS_EXEC_TASK_HEALTH_MONITOR) != APP_SCHEDULER_OK) {
 		return false;
 	}
 
@@ -222,6 +243,10 @@ void App_Init(void) {
 	 * leaves event detection and journaling operational in degraded mode. */
 	(void) PhotoCaptureService_Init();
 
+	/* Startup services above may perform blocking Flash recovery and camera
+	 * initialization. Refresh the scheduler epoch immediately before task
+	 * registration so startup time is not misreported as missed task periods. */
+	now_ms = HAL_GetTick();
 	if (!App_RegisterTasks(now_ms)) {
 		App_EnterFault(APP_FAULT_SCHEDULER_SETUP);
 		DiagUART_Printf(
@@ -244,11 +269,19 @@ void App_RunOnce(void) {
 		/* Poll DVP frame state/timeouts on every super-loop pass. Individual
 		 * HREF line finalization is handled immediately in the HREF EXTI ISR;
 		 * do not move this frame-state poll into the 5 ms scheduler. */
+		Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_CAMERA, 0U);
+		Metrics_ProbeSet(METRICS_PROBE_CAMERA, true);
 		OV7670_DvpCapture_Process();
+		Metrics_ProbeSet(METRICS_PROBE_CAMERA, false);
+		Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_CAMERA);
 
 		/* Acquire and classify first: CLI/Flash foreground work must not delay
 		 processing of a sample that has already arrived from the MPU-6050. */
+		Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_IMU, 0U);
+		Metrics_ProbeSet(METRICS_PROBE_IMU, true);
 		ImuService_RunOnce();
+		Metrics_ProbeSet(METRICS_PROBE_IMU, false);
+		Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_IMU);
 		ConfigService_Get(&config, &sealed, &generation);
 		(void) sealed;
 		(void) generation;
@@ -262,10 +295,12 @@ void App_RunOnce(void) {
 					(config->mode == CONFIG_MODE_SITE) ?
 							&config->site : &config->cargo;
 
+			Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_DETECTOR, 0U);
 			IncidentDetector_ProcessSample(
 					(AppState_Get(&s_state_manager) == APP_STATE_ARMED),
 					(ConfigMode_t) config->mode, profile, sample, sequence,
 					sample_tick);
+			Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_DETECTOR);
 			{
 				IncidentDetectorStats_t detector_stats;
 				uint32_t event_total;
@@ -276,6 +311,8 @@ void App_RunOnce(void) {
 						+ detector_stats.vibration_events;
 				if (event_total != s_led_event_total) {
 					s_led_event_total = event_total;
+					(void) Metrics_EventPush(
+							METRICS_EVENT_INCIDENT_COUNT_CHANGED, event_total);
 					LedService_TriggerIncidentPattern(HAL_GetTick());
 				}
 			}
@@ -299,5 +336,6 @@ AppState_t App_GetState(void) {
 void App_EnterFault(uint32_t fault_code) {
 	if (AppState_Get(&s_state_manager) != APP_STATE_FAULT) {
 		AppState_EnterFault(&s_state_manager, fault_code);
+		(void) Metrics_EventPush(METRICS_EVENT_FAULT_ENTERED, fault_code);
 	}
 }

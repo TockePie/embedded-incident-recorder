@@ -6,6 +6,9 @@
 #include "services/photo_store.h"
 #include "services/photo_capture_service.h"
 #include "services/led_service.h"
+#include "metrics/metrics.h"
+#include "metrics/memory_metrics.h"
+#include "metrics/memory_metrics_test.h"
 #include "app/app.h"
 #include "usart.h"
 #include "stm32f4xx_hal.h"
@@ -888,6 +891,10 @@ static void Cli_PrintHelp(void) {
 			"Incident Recorder CLI\r\n"
 					" help - show available commands\r\n"
 					" status - show system state and diagnostics\r\n"
+					" metrics - show timing, jitter, missed periods and foreground load\r\n"
+					" metrics events - show and drain the metrics event FIFO\r\n"
+					" memory - show Flash/RAM/heap/stack usage\r\n"
+					" memory test - run memory metrics self-test\r\n"
 					" config - show Cargo/Site profiles and storage status\r\n"
 					" config mode cargo|site\r\n"
 					" config cargo shock <mg>|tilt <deg>|temp <minC> <maxC>\r\n"
@@ -909,6 +916,177 @@ static void Cli_PrintHelp(void) {
 			"Erase requires DISARMED, SEALED config and password.\r\n"
 			"Edits require DISARMED; changes are saved to W25Q64.\r\n");
 }
+static void Cli_U64ToString(uint64_t value, char output[21]) {
+	char reversed[20];
+	uint8_t length = 0U;
+	uint8_t index;
+	do {
+		reversed[length++] = (char) ('0' + (value % 10ULL));
+		value /= 10ULL;
+	} while ((value != 0ULL) && ((size_t) length < sizeof(reversed)));
+	for (index = 0U; index < length; ++index) {
+		output[index] = reversed[length - index - 1U];
+	}
+	output[length] = '\0';
+}
+
+static void Cli_I64ToString(int64_t value, char output[22]) {
+	uint64_t magnitude;
+	if (value < 0LL) {
+		magnitude = (uint64_t) (-(value + 1LL)) + 1ULL;
+		output[0] = '-';
+		Cli_U64ToString(magnitude, &output[1]);
+	} else {
+		Cli_U64ToString((uint64_t) value, output);
+	}
+}
+
+static void Cli_PrintMetrics(void) {
+	Metrics_Stats_t loop_stats;
+	Metrics_LoadStats_t load_stats;
+	uint32_t i;
+	char min_us_text[21];
+	char average_us_text[21];
+	char max_us_text[21];
+
+	if (!Metrics_LoopStatsGet(&loop_stats)
+			|| !Metrics_LoadStatsGet(&load_stats)) {
+		Cli_TxWrite("ERR: metrics are not initialized.\r\n");
+		return;
+	}
+
+	Cli_Printf("[METRICS] measured_work_load current=%u.%u%% average=%u.%u%% max=%u.%u%% windows=%lu\r\n",
+			(unsigned int) (load_stats.current_permille / 10U),
+			(unsigned int) (load_stats.current_permille % 10U),
+			(unsigned int) (load_stats.average_permille / 10U),
+			(unsigned int) (load_stats.average_permille % 10U),
+			(unsigned int) (load_stats.max_permille / 10U),
+			(unsigned int) (load_stats.max_permille % 10U),
+			(unsigned long) load_stats.window_count);
+	Cli_U64ToString(Metrics_CyclesToUs(loop_stats.min_cycles), min_us_text);
+	Cli_U64ToString((loop_stats.count != 0U) ?
+			Metrics_CyclesToUs(loop_stats.total_cycles / loop_stats.count) : 0ULL,
+			average_us_text);
+	Cli_U64ToString(Metrics_CyclesToUs(loop_stats.max_cycles), max_us_text);
+	Cli_Printf("[METRICS] loop count=%lu min_us=%s avg_us=%s max_us=%s\r\n",
+			(unsigned long) loop_stats.count, min_us_text, average_us_text,
+			max_us_text);
+
+	for (i = 0U; i < (uint32_t) METRICS_EXEC_ID_COUNT; ++i) {
+		Metrics_ExecStats_t stats;
+		const Metrics_ExecId_t id = (Metrics_ExecId_t) i;
+		if (Metrics_ExecStatsGet(id, &stats)) {
+			const uint64_t average_cycles = (stats.count != 0U) ?
+					(stats.total_cycles / stats.count) : 0ULL;
+			const int64_t average_jitter = (stats.jitter_count != 0U) ?
+					(stats.total_jitter_us / (int64_t) stats.jitter_count) : 0LL;
+			char jitter_min_text[22];
+			char jitter_average_text[22];
+			char jitter_max_text[22];
+			Cli_U64ToString(Metrics_CyclesToUs(stats.min_cycles), min_us_text);
+			Cli_U64ToString(Metrics_CyclesToUs(average_cycles), average_us_text);
+			Cli_U64ToString(Metrics_CyclesToUs(stats.max_cycles), max_us_text);
+			Cli_I64ToString(stats.min_jitter_us, jitter_min_text);
+			Cli_I64ToString(average_jitter, jitter_average_text);
+			Cli_I64ToString(stats.max_jitter_us, jitter_max_text);
+			Cli_Printf("[METRICS] %-20s n=%lu min_us=%s avg_us=%s max_us=%s jitter_n=%lu jitter_min=%s jitter_avg=%s jitter_max=%s missed=%lu\r\n",
+					Metrics_ExecIdName(id),
+					(unsigned long) stats.count,
+					min_us_text, average_us_text, max_us_text,
+					(unsigned long) stats.jitter_count,
+					jitter_min_text, jitter_average_text, jitter_max_text,
+					(unsigned long) stats.missed_periods);
+		}
+	}
+	Cli_TxWrite("[METRICS] load sums measured work regions; it is not full hardware CPU utilization.\r\n");
+}
+
+static void Cli_PrintMemory(void) {
+    MemoryMetrics_Snapshot_t memory;
+
+    if (!MemoryMetrics_GetSnapshot(&memory)) {
+        Cli_TxWrite("[MEMORY] ERROR: linker memory layout is invalid or unavailable.\r\n");
+        return;
+    }
+
+    Cli_Printf("[MEMORY] FLASH used=%lu capacity=%lu free=%lu bytes\r\n",
+            (unsigned long) memory.flash_used_bytes,
+            (unsigned long) memory.flash_capacity_bytes,
+            (unsigned long) (memory.flash_capacity_bytes - memory.flash_used_bytes));
+    Cli_Printf("[MEMORY] RAM data=%lu bss=%lu static=%lu capacity=%lu free_after_static=%lu bytes\r\n",
+            (unsigned long) memory.ram_data_bytes,
+            (unsigned long) memory.ram_bss_bytes,
+            (unsigned long) memory.ram_static_bytes,
+            (unsigned long) memory.ram_capacity_bytes,
+            (unsigned long) memory.ram_free_after_static_bytes);
+    Cli_Printf("[MEMORY] HEAP current=%lu peak=%lu capacity_to_stack_limit=%lu min_reserve=%lu sbrk_calls=%lu failed=%lu bytes\r\n",
+            (unsigned long) memory.heap_current_bytes,
+            (unsigned long) memory.heap_peak_bytes,
+            (unsigned long) memory.heap_capacity_bytes,
+            (unsigned long) memory.heap_min_reserve_bytes,
+            (unsigned long) memory.heap_sbrk_calls,
+            (unsigned long) memory.heap_failed_calls);
+    if (memory.stack_paint_valid) {
+        Cli_Printf("[MEMORY] STACK peak_used=%lu reserved=%lu free_watermark=%lu bytes paint=VALID\r\n",
+                (unsigned long) memory.stack_used_peak_bytes,
+                (unsigned long) memory.stack_reserved_bytes,
+                (unsigned long) memory.stack_free_watermark_bytes);
+    } else {
+        Cli_Printf("[MEMORY] STACK peak_used=UNAVAILABLE reserved=%lu bytes paint=INVALID\r\n",
+                (unsigned long) memory.stack_reserved_bytes);
+    }
+    Cli_TxWrite("[MEMORY] stack watermark covers linker _Min_Stack_Size only; Flash is internal MCU Flash (external W25Q64 excluded).\r\n");
+}
+
+static void Cli_PrintMemoryTest(void) {
+    const uint32_t result = MemoryMetricsTest_Run();
+    Cli_Printf("[MEMORY_TEST] result=0x%08lX layout=%s stack_paint=%s heap_accounting=%s\r\n",
+            (unsigned long) result,
+            ((result & MEMORY_METRICS_TEST_LAYOUT_OK) != 0U) ? "PASS" : "FAIL",
+            ((result & MEMORY_METRICS_TEST_STACK_OK) != 0U) ? "PASS" : "FAIL",
+            ((result & MEMORY_METRICS_TEST_HEAP_OK) != 0U) ? "PASS" : "FAIL");
+}
+
+static void Cli_PrintMetricEvents(void) {
+	Metrics_EventStatus_t status;
+	Metrics_Event_t event;
+	uint32_t printed = 0U;
+	const uint32_t max_lines = 32U;
+
+	Metrics_EventStatusGet(&status);
+	Cli_Printf("[METRICS] events queued=%lu dropped=%lu\r\n",
+			(unsigned long) status.count, (unsigned long) status.dropped);
+	while ((printed < max_lines) && Metrics_EventPop(&event)) {
+		char timestamp_us_text[21];
+		Cli_U64ToString(Metrics_CyclesToUs(event.timestamp_cycles),
+				timestamp_us_text);
+		if (event.id == METRICS_EVENT_SCHEDULER_MISSED_PERIODS) {
+			const uint32_t task_id = (event.argument >> 24U) & 0xFFU;
+			const uint32_t missed = event.argument & 0x00FFFFFFUL;
+			Cli_Printf("[METRIC_EVENT] t_us=%s id=%s task=%s missed=%lu\r\n",
+					timestamp_us_text,
+					Metrics_EventIdName(event.id),
+					Metrics_ExecIdName((Metrics_ExecId_t) task_id),
+					(unsigned long) missed);
+		} else {
+			Cli_Printf("[METRIC_EVENT] t_us=%s id=%s arg=%lu\r\n",
+					timestamp_us_text,
+					Metrics_EventIdName(event.id),
+					(unsigned long) event.argument);
+		}
+		printed++;
+	}
+	if (printed == 0U) {
+		Cli_TxWrite("[METRICS] event queue is empty.\r\n");
+	} else {
+		Metrics_EventStatusGet(&status);
+		if (status.count != 0U) {
+			Cli_Printf("[METRICS] %lu events remain; run 'metrics events' again to continue.\r\n",
+					(unsigned long) status.count);
+		}
+	}
+}
+
 static void Cli_PrintStatus(void) {
 	Cli_Printf("[STATUS] state=%s startup=%s uptime_ms=%lu\r\n",
 			Cli_StateName(App_GetState()),
@@ -1984,6 +2162,22 @@ static void Cli_ExecuteLine(char *line) {
 			Cli_PrintStatus();
 		else
 			Cli_TxWrite("ERR: status takes no arguments\r\n");
+	} else if (strcmp(start, "metrics") == 0) {
+		if (*argument == '\0') {
+			Cli_PrintMetrics();
+		} else if (strcmp(argument, "events") == 0) {
+			Cli_PrintMetricEvents();
+		} else {
+			Cli_TxWrite("Usage: metrics | metrics events\r\n");
+		}
+	} else if (strcmp(start, "memory") == 0) {
+		if (*argument == '\0') {
+			Cli_PrintMemory();
+		} else if (strcmp(argument, "test") == 0) {
+			Cli_PrintMemoryTest();
+		} else {
+			Cli_TxWrite("Usage: memory | memory test\r\n");
+		}
 	} else if (strcmp(start, "config") == 0) {
 		Cli_HandleConfig(argument);
 	} else if (strcmp(start, "journal") == 0) {

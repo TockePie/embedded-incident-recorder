@@ -1,0 +1,108 @@
+# scenario=S2_nominal git=PR10 version=1.0.0
+Incident Recorder CLI ready. Type 'help'.
+IR> status
+[STATUS] state=DISARMED startup=PASS uptime_ms=38208
+[STATUS] config_mode=CARGO sealed=0 generation=3 save=IDLE bad_password=0
+[STATUS] rx_overflow=0 tx_drop=0 tx_queue_overflow=0 tx_start_error=0 rx_restart_error=0
+IR> config
+[CONFIG] mode=CARGO sealed=NO generation=3 save=IDLE
+[CONFIG] CARGO shock_mg=2500 tilt_deg=45 temp_min_c=10 temp_max_c=24
+[CONFIG] SITE vibration_rms_mg=100 temp_min_c=15 temp_max_c=26
+IR> status
+[STATUS] state=ARMED startup=PASS uptime_ms=72652
+[STATUS] config_mode=CARGO sealed=0 generation=3 save=IDLE bad_password=0
+[STATUS] rx_overflow=0 tx_drop=0 tx_queue_overflow=0 tx_start_error=0 rx_restart_error=0
+IR> journal
+[JOURNAL] ready=1 free=7856 pending=0
+[JOURNAL] records_returned=5 (newest first; requested=5)
+[JOURNAL RECORD] id=82 type=TEMPERATURE mode=CARGO tick_ms=64346 value=24088 threshold=24000
+[JOURNAL RECORD] id=81 type=SHOCK mode=CARGO tick_ms=69791 value=10666 threshold=2500
+[JOURNAL RECORD] id=80 type=SHOCK mode=CARGO tick_ms=54771 value=10167 threshold=2500
+[JOURNAL RECORD] id=79 type=SHOCK mode=CARGO tick_ms=44695 value=11448 threshold=2500
+[JOURNAL RECORD] id=78 type=SHOCK mode=CARGO tick_ms=222810 value=8373 threshold=2500
+IR> journal 10
+[JOURNAL] ready=1 free=7851 pending=0
+[JOURNAL] records_returned=10 (newest first; requested=10)
+[JOURNAL RECORD] id=87 type=SHOCK mode=CARGO tick_ms=162554 value=3261 threshold=2500
+[JOURNAL RECORD] id=86 type=SHOCK mode=CARGO tick_ms=161784 value=2643 threshold=2500
+[JOURNAL RECORD] id=85 type=TILT mode=CARGO tick_ms=159998 value=10816 threshold=4500
+[JOURNAL RECORD] id=84 type=TILT mode=CARGO tick_ms=143668 value=4504 threshold=4500
+[JOURNAL RECORD] id=83 type=SHOCK mode=CARGO tick_ms=94897 value=10914 threshold=2500
+[JOURNAL RECORD] id=82 type=TEMPERATURE mode=CARGO tick_ms=64346 value=24088 threshold=24000
+[JOURNAL RECORD] id=81 type=SHOCK mode=CARGO tick_ms=69791 value=10666 threshold=2500
+[JOURNAL RECORD] id=80 type=SHOCK mode=CARGO tick_ms=54771 value=10167 threshold=2500
+[JOURNAL RECORD] id=79 type=SHOCK mode=CARGO tick_ms=44695 value=11448 threshold=2500
+[JOURNAL RECORD] id=78 type=SHOCK mode=CARGO tick_ms=222810 value=8373 threshold=2500
+IR> photos
+[PHOTOS] retained_events=10 (newest first)
+[EVENT] id=87 type=SHOCK mode=CARGO tick_ms=162554 value=3261 threshold=2500 photo=NO reason=cooldown (<3 s for same incident type)
+[EVENT] id=86 type=SHOCK mode=CARGO tick_ms=161784 value=2643 threshold=2500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0x34BF95ED
+[EVENT] id=85 type=TILT mode=CARGO tick_ms=159998 value=10816 threshold=4500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0x7CAE501C
+[EVENT] id=84 type=TILT mode=CARGO tick_ms=143668 value=4504 threshold=4500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0x3D1EC578
+[EVENT] id=83 type=SHOCK mode=CARGO tick_ms=94897 value=10914 threshold=2500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0xF6158D10
+[EVENT] id=82 type=TEMPERATURE mode=CARGO tick_ms=64346 value=24088 threshold=24000 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0xA756A6E6
+[EVENT] id=81 type=SHOCK mode=CARGO tick_ms=69791 value=10666 threshold=2500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0x67B8E2E9
+[EVENT] id=80 type=SHOCK mode=CARGO tick_ms=54771 value=10167 threshold=2500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0xF3A6AA38
+[EVENT] id=79 type=SHOCK mode=CARGO tick_ms=44695 value=11448 threshold=2500 photo=YES size=160x120 format=RGB565 bytes=38400 crc32=0xC21A01C2
+[EVENT] id=78 type=SHOCK mode=CARGO tick_ms=222810 value=8373 threshold=2500 photo=NO reason=cooldown (<3 s for same incident type)
+IR> status
+[STATUS] state=DISARMED startup=PASS uptime_ms=225661
+[STATUS] config_mode=CARGO sealed=0 generation=3 save=IDLE bad_password=0
+[STATUS] rx_overflow=0 tx_drop=0 tx_queue_overflow=0 tx_start_error=0 rx_restart_error=0
+IR> metrics
+[METRICS] measured_work_load current=47.8% average=49.2% max=68.3% windows=227
+[METRICS] loop count=3904134 min_us=30 avg_us=51 max_us=99238
+[METRICS] button               n=45409 min_us=2 avg_us=2 max_us=8 jitter_n=45408 jitter_min=-583 jitter_avg=11 jitter_max=96323 missed=102
+[METRICS] state_manager        n=45409 min_us=2 avg_us=2 max_us=5 jitter_n=45408 jitter_min=-586 jitter_avg=11 jitter_max=96326 missed=102
+[METRICS] led                  n=22709 min_us=3 avg_us=3 max_us=23 jitter_n=22708 jitter_min=-619 jitter_avg=22 jitter_max=96308 missed=46
+[METRICS] cli                  n=45408 min_us=5 avg_us=7 max_us=21022 jitter_n=45408 jitter_min=-608 jitter_avg=11 jitter_max=96348 missed=102
+[METRICS] config               n=45408 min_us=2 avg_us=3 max_us=6 jitter_n=45407 jitter_min=-3261 jitter_avg=11 jitter_max=96351 missed=102
+[METRICS] journal              n=45408 min_us=8 avg_us=70 max_us=9695 jitter_n=45407 jitter_min=-3258 jitter_avg=11 jitter_max=96354 missed=102
+[METRICS] health_monitor       n=2274 min_us=8 avg_us=96 max_us=12678 jitter_n=2273 jitter_min=-2385 jitter_avg=88 jitter_max=83982 missed=0
+[METRICS] foreground_camera    n=3904135 min_us=2 avg_us=3 max_us=95088 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] foreground_imu       n=3904135 min_us=3 avg_us=22 max_us=2007 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] foreground_detector  n=3904135 min_us=2 avg_us=2 max_us=447 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] load sums measured work regions; it is not full hardware CPU utilization.
+IR> metrics events
+[METRICS] events queued=64 dropped=9
+[METRIC_EVENT] t_us=7555657 id=scheduler_missed task=journal missed=1
+[METRIC_EVENT] t_us=59590171 id=button_press arg=0
+[METRIC_EVENT] t_us=59590192 id=state_change arg=1
+[METRIC_EVENT] t_us=61589790 id=incident_count arg=1
+[METRIC_EVENT] t_us=61982081 id=scheduler_missed task=button missed=18
+[METRIC_EVENT] t_us=61982101 id=scheduler_missed task=state_manager missed=18
+[METRIC_EVENT] t_us=61982120 id=scheduler_missed task=led missed=8
+[METRIC_EVENT] t_us=61982141 id=scheduler_missed task=cli missed=18
+[METRIC_EVENT] t_us=61982164 id=scheduler_missed task=config missed=18
+[METRIC_EVENT] t_us=61982184 id=scheduler_missed task=journal missed=18
+[METRIC_EVENT] t_us=86046687 id=scheduler_missed task=button missed=2
+[METRIC_EVENT] t_us=86046706 id=scheduler_missed task=state_manager missed=2
+[METRIC_EVENT] t_us=86046728 id=scheduler_missed task=led missed=1
+[METRIC_EVENT] t_us=86046748 id=scheduler_missed task=cli missed=2
+[METRIC_EVENT] t_us=86046770 id=scheduler_missed task=config missed=2
+[METRIC_EVENT] t_us=86046790 id=scheduler_missed task=journal missed=2
+[METRIC_EVENT] t_us=92140782 id=incident_count arg=2
+[METRIC_EVENT] t_us=92689560 id=scheduler_missed task=button missed=18
+[METRIC_EVENT] t_us=92689579 id=scheduler_missed task=state_manager missed=18
+[METRIC_EVENT] t_us=92689598 id=scheduler_missed task=led missed=9
+[METRIC_EVENT] t_us=92689619 id=scheduler_missed task=cli missed=18
+[METRIC_EVENT] t_us=92689642 id=scheduler_missed task=config missed=18
+[METRIC_EVENT] t_us=92689662 id=scheduler_missed task=journal missed=18
+[METRIC_EVENT] t_us=140911765 id=incident_count arg=3
+[METRIC_EVENT] t_us=141309747 id=scheduler_missed task=button missed=18
+[METRIC_EVENT] t_us=141309766 id=scheduler_missed task=state_manager missed=18
+[METRIC_EVENT] t_us=141309786 id=scheduler_missed task=led missed=9
+[METRIC_EVENT] t_us=141309806 id=scheduler_missed task=cli missed=18
+[METRIC_EVENT] t_us=141309829 id=scheduler_missed task=config missed=18
+[METRIC_EVENT] t_us=141309849 id=scheduler_missed task=journal missed=18
+[METRIC_EVENT] t_us=157241770 id=incident_count arg=4
+[METRIC_EVENT] t_us=157688483 id=scheduler_missed task=button missed=19
+[METRICS] 32 events remain; run 'metrics events' again to continue.
+IR> memory
+[MEMORY] FLASH used=131852 capacity=524288 free=392436 bytes
+[MEMORY] RAM data=96 bss=73348 static=73448 capacity=131072 free_after_static=57624 bytes
+[MEMORY] HEAP current=0 peak=0 capacity_to_stack_limit=56600 min_reserve=512 sbrk_calls=0 failed=0 bytes
+[MEMORY] STACK peak_used=1024 reserved=1024 free_watermark=0 bytes paint=VALID
+[MEMORY] stack watermark covers linker _Min_Stack_Size only; Flash is internal MCU Flash (external W25Q64 excluded).
+IR>
+

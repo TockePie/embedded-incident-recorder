@@ -1,0 +1,206 @@
+# scenario=S3b_photo_transfer git=PR10 version=1.0.0
+Incident Recorder Host Tool — type 'help' for commands; 'exit' to quit.
+[host] connected: COM4 @ 115200
+irhost> config
+[CONFIG] mode=CARGO sealed=NO generation=9 save=IDLE
+[CONFIG] CARGO shock_mg=1000 tilt_deg=10 temp_min_c=15 temp_max_c=25
+[CONFIG] SITE vibration_rms_mg=100 temp_min_c=15 temp_max_c=26
+irhost> status
+[STATUS] state=DISARMED startup=PASS uptime_ms=933862
+[STATUS] config_mode=CARGO sealed=0 generation=9 save=IDLE bad_password=0
+[STATUS] rx_overflow=0 tx_drop=0 tx_queue_overflow=0 tx_start_error=0 rx_restart_error=0
+irhost> photos list
+[photos] available=75 skipped=0 index_entries=75; index=incident_photos\photo_index.json
+  id=1 160x120 bytes=38400 CRC32=FED10E12
+  id=3 160x120 bytes=38400 CRC32=45FA8757
+  id=5 160x120 bytes=38400 CRC32=F802EEF8
+  id=6 160x120 bytes=38400 CRC32=41E04DF9
+  id=7 160x120 bytes=38400 CRC32=6DAA8500
+  id=8 160x120 bytes=38400 CRC32=59239945
+  id=11 160x120 bytes=38400 CRC32=C053FD34
+  id=12 160x120 bytes=38400 CRC32=F9087187
+  id=13 160x120 bytes=38400 CRC32=8974CCB6
+  id=14 160x120 bytes=38400 CRC32=909EC2E9
+  id=15 160x120 bytes=38400 CRC32=BD512AD7
+  id=16 160x120 bytes=38400 CRC32=A568C49B
+  id=17 160x120 bytes=38400 CRC32=6A59E9E3
+  id=18 160x120 bytes=38400 CRC32=10E0D004
+  id=19 160x120 bytes=38400 CRC32=DD44753B
+  id=22 160x120 bytes=38400 CRC32=00A047D9
+  id=23 160x120 bytes=38400 CRC32=CDC8D4B2
+  id=24 160x120 bytes=38400 CRC32=6B9D8EDD
+  id=25 160x120 bytes=38400 CRC32=3760CDB3
+  id=29 160x120 bytes=38400 CRC32=42A499DF
+  id=31 160x120 bytes=38400 CRC32=1C2629F9
+  id=32 160x120 bytes=38400 CRC32=AB3899A5
+  id=34 160x120 bytes=38400 CRC32=BB9E0CA2
+  id=35 160x120 bytes=38400 CRC32=B44A187E
+  id=36 160x120 bytes=38400 CRC32=9184C4E0
+  id=38 160x120 bytes=38400 CRC32=5EE2B321
+  id=41 160x120 bytes=38400 CRC32=A6AFB1BA
+  id=42 160x120 bytes=38400 CRC32=B02E55A8
+  id=43 160x120 bytes=38400 CRC32=05AB5365
+  id=45 160x120 bytes=38400 CRC32=E2AF04C3
+  id=46 160x120 bytes=38400 CRC32=C34D15D2
+  id=53 160x120 bytes=38400 CRC32=26606895
+  id=54 160x120 bytes=38400 CRC32=8EB71405
+  id=55 160x120 bytes=38400 CRC32=79C9EEA0
+  id=56 160x120 bytes=38400 CRC32=25E50F3A
+  id=60 160x120 bytes=38400 CRC32=8EFDAB83
+  id=62 160x120 bytes=38400 CRC32=64297922
+  id=63 160x120 bytes=38400 CRC32=6F8A959C
+  id=64 160x120 bytes=38400 CRC32=C84DD6B0
+  id=66 160x120 bytes=38400 CRC32=111231F0
+  id=67 160x120 bytes=38400 CRC32=21DF55D1
+  id=68 160x120 bytes=38400 CRC32=1FBADD8A
+  id=69 160x120 bytes=38400 CRC32=84A44251
+  id=70 160x120 bytes=38400 CRC32=344ED0A6
+  id=71 160x120 bytes=38400 CRC32=0C66E612
+  id=72 160x120 bytes=38400 CRC32=02038ACD
+  id=73 160x120 bytes=38400 CRC32=BC1474E0
+  id=75 160x120 bytes=38400 CRC32=CBF6665C
+  id=77 160x120 bytes=38400 CRC32=C68326C5
+  id=79 160x120 bytes=38400 CRC32=C21A01C2
+  id=80 160x120 bytes=38400 CRC32=F3A6AA38
+  id=81 160x120 bytes=38400 CRC32=67B8E2E9
+  id=82 160x120 bytes=38400 CRC32=A756A6E6
+  id=83 160x120 bytes=38400 CRC32=F6158D10
+  id=84 160x120 bytes=38400 CRC32=3D1EC578
+  id=85 160x120 bytes=38400 CRC32=7CAE501C
+  id=86 160x120 bytes=38400 CRC32=34BF95ED
+  id=88 160x120 bytes=38400 CRC32=CCC9B6A0
+  id=89 160x120 bytes=38400 CRC32=1FC86CCA
+  id=90 160x120 bytes=38400 CRC32=DB8EE2D1
+  id=91 160x120 bytes=38400 CRC32=D6D9894E
+  id=92 160x120 bytes=38400 CRC32=C91DE258
+  id=93 160x120 bytes=38400 CRC32=5CF5FBB2
+  id=94 160x120 bytes=38400 CRC32=C2D6786E
+  id=100 160x120 bytes=38400 CRC32=014F78F8
+  id=101 160x120 bytes=38400 CRC32=CACB3D07
+  id=108 160x120 bytes=38400 CRC32=2952DEF3
+  id=109 160x120 bytes=38400 CRC32=A14696E2
+  id=121 160x120 bytes=38400 CRC32=B39D0915
+  id=125 160x120 bytes=38400 CRC32=0B72452E
+  id=126 160x120 bytes=38400 CRC32=67B9D91F
+  id=131 160x120 bytes=38400 CRC32=3B96C62A
+  id=138 160x120 bytes=38400 CRC32=1F222FFC
+  id=146 160x120 bytes=38400 CRC32=8A29C127
+  id=157 160x120 bytes=38400 CRC32=2677076A
+irhost> photo all
+[photo] 1/75 id=1 saved: incident_photos\event_1_160x120.png
+[photo] 2/75 id=3 saved: incident_photos\event_3_160x120.png
+[photo] 3/75 id=5 saved: incident_photos\event_5_160x120.png
+[photo] 4/75 id=6 saved: incident_photos\event_6_160x120.png
+[photo] 5/75 id=7 saved: incident_photos\event_7_160x120.png
+[photo] 6/75 id=8 saved: incident_photos\event_8_160x120.png
+[photo] 7/75 id=11 saved: incident_photos\event_11_160x120.png
+[photo] 8/75 id=12 saved: incident_photos\event_12_160x120.png
+[photo] 9/75 id=13 saved: incident_photos\event_13_160x120.png
+[photo] 10/75 id=14 saved: incident_photos\event_14_160x120.png
+[photo] 11/75 id=15 saved: incident_photos\event_15_160x120.png
+[photo] 12/75 id=16 saved: incident_photos\event_16_160x120.png
+[photo] 13/75 id=17 saved: incident_photos\event_17_160x120.png
+[photo] id=18: UART noise recovered (0 chunk retransmission(s), 289 stray byte(s) dropped)
+[photo] 14/75 id=18 saved: incident_photos\event_18_160x120.png
+[photo] 15/75 id=19 saved: incident_photos\event_19_160x120.png
+[photo] 16/75 id=22 saved: incident_photos\event_22_160x120.png
+[photo] 17/75 id=23 saved: incident_photos\event_23_160x120.png
+[photo] 18/75 id=24 saved: incident_photos\event_24_160x120.png
+[photo] 19/75 id=25 saved: incident_photos\event_25_160x120.png
+[photo] 20/75 id=29 saved: incident_photos\event_29_160x120.png
+[photo] 21/75 id=31 saved: incident_photos\event_31_160x120.png
+[photo] 22/75 id=32 saved: incident_photos\event_32_160x120.png
+[photo] 23/75 id=34 saved: incident_photos\event_34_160x120.png
+[photo] 24/75 id=35 saved: incident_photos\event_35_160x120.png
+[photo] 25/75 id=36 saved: incident_photos\event_36_160x120.png
+[photo] 26/75 id=38 saved: incident_photos\event_38_160x120.png
+[photo] 27/75 id=41 saved: incident_photos\event_41_160x120.png
+[photo] 28/75 id=42 saved: incident_photos\event_42_160x120.png
+[photo] 29/75 id=43 saved: incident_photos\event_43_160x120.png
+[photo] 30/75 id=45 saved: incident_photos\event_45_160x120.png
+[photo] 31/75 id=46 saved: incident_photos\event_46_160x120.png
+[photo] 32/75 id=53 saved: incident_photos\event_53_160x120.png
+[photo] 33/75 id=54 saved: incident_photos\event_54_160x120.png
+[photo] 34/75 id=55 saved: incident_photos\event_55_160x120.png
+[photo] 35/75 id=56 saved: incident_photos\event_56_160x120.png
+[photo] 36/75 id=60 saved: incident_photos\event_60_160x120.png
+[photo] 37/75 id=62 saved: incident_photos\event_62_160x120.png
+[photo] 38/75 id=63 saved: incident_photos\event_63_160x120.png
+[photo] 39/75 id=64 saved: incident_photos\event_64_160x120.png
+[photo] 40/75 id=66 saved: incident_photos\event_66_160x120.png
+[photo] 41/75 id=67 saved: incident_photos\event_67_160x120.png
+[photo] 42/75 id=68 saved: incident_photos\event_68_160x120.png
+[photo] 43/75 id=69 saved: incident_photos\event_69_160x120.png
+[photo] 44/75 id=70 saved: incident_photos\event_70_160x120.png
+[photo] 45/75 id=71 saved: incident_photos\event_71_160x120.png
+[photo] 46/75 id=72 saved: incident_photos\event_72_160x120.png
+[photo] 47/75 id=73 saved: incident_photos\event_73_160x120.png
+[photo] 48/75 id=75 saved: incident_photos\event_75_160x120.png
+[photo] 49/75 id=77 saved: incident_photos\event_77_160x120.png
+[photo] 50/75 id=79 saved: incident_photos\event_79_160x120.png
+[photo] 51/75 id=80 saved: incident_photos\event_80_160x120.png
+[photo] 52/75 id=81 saved: incident_photos\event_81_160x120.png
+[photo] 53/75 id=82 saved: incident_photos\event_82_160x120.png
+[photo] 54/75 id=83 saved: incident_photos\event_83_160x120.png
+[photo] 55/75 id=84 saved: incident_photos\event_84_160x120.png
+[photo] 56/75 id=85 saved: incident_photos\event_85_160x120.png
+[photo] 57/75 id=86 saved: incident_photos\event_86_160x120.png
+[photo] 58/75 id=88 saved: incident_photos\event_88_160x120.png
+[photo] 59/75 id=89 saved: incident_photos\event_89_160x120.png
+[photo] 60/75 id=90 saved: incident_photos\event_90_160x120.png
+[photo] 61/75 id=91 saved: incident_photos\event_91_160x120.png
+[photo] 62/75 id=92 saved: incident_photos\event_92_160x120.png
+[photo] 63/75 id=93 saved: incident_photos\event_93_160x120.png
+[photo] 64/75 id=94 saved: incident_photos\event_94_160x120.png
+[photo] 65/75 id=100 saved: incident_photos\event_100_160x120.png
+[photo] 66/75 id=101 saved: incident_photos\event_101_160x120.png
+[photo] 67/75 id=108 saved: incident_photos\event_108_160x120.png
+[photo] 68/75 id=109 saved: incident_photos\event_109_160x120.png
+[photo] 69/75 id=121 saved: incident_photos\event_121_160x120.png
+[photo] 70/75 id=125 saved: incident_photos\event_125_160x120.png
+[photo] 71/75 id=126 saved: incident_photos\event_126_160x120.png
+[photo] 72/75 id=131 saved: incident_photos\event_131_160x120.png
+[photo] 73/75 id=138 saved: incident_photos\event_138_160x120.png
+[photo] 74/75 id=146 saved: incident_photos\event_146_160x120.png
+[photo] 75/75 id=157 saved: incident_photos\event_157_160x120.png
+[photo] all complete: 75 photos
+irhost> status
+[STATUS] state=DISARMED startup=PASS uptime_ms=1405777
+[STATUS] config_mode=CARGO sealed=0 generation=9 save=IDLE bad_password=0
+[STATUS] rx_overflow=0 tx_drop=0 tx_queue_overflow=0 tx_start_error=0 rx_restart_error=0
+irhost> photo selftest
+[PHOTO TEST] metadata/CRC format self-test PASS
+irhost> raw metrics
+[METRICS] measured_work_load current=47.7% average=49.7% max=69.5% windows=1422
+[METRICS] loop count=24064697 min_us=30 avg_us=51 max_us=101056
+[METRICS] button               n=284322 min_us=2 avg_us=2 max_us=11 jitter_n=284321 jitter_min=-572 jitter_avg=4 jitter_max=96342 missed=254
+[METRICS] state_manager        n=284322 min_us=2 avg_us=2 max_us=7 jitter_n=284321 jitter_min=-572 jitter_avg=4 jitter_max=96345 missed=254
+[METRICS] led                  n=142182 min_us=3 avg_us=3 max_us=8 jitter_n=142181 jitter_min=-659 jitter_avg=8 jitter_max=96344 missed=91
+[METRICS] cli                  n=284321 min_us=5 avg_us=105 max_us=28052 jitter_n=284321 jitter_min=-590 jitter_avg=4 jitter_max=96368 missed=254
+[METRICS] config               n=284321 min_us=2 avg_us=3 max_us=11 jitter_n=284320 jitter_min=-3295 jitter_avg=4 jitter_max=96371 missed=254
+[METRICS] journal              n=284321 min_us=7 avg_us=28 max_us=9786 jitter_n=284320 jitter_min=-3292 jitter_avg=4 jitter_max=96374 missed=254
+[METRICS] health_monitor       n=14224 min_us=8 avg_us=85 max_us=12677 jitter_n=14223 jitter_min=-9884 jitter_avg=39 jitter_max=85509 missed=0
+[METRICS] foreground_camera    n=24064698 min_us=2 avg_us=2 max_us=95088 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] foreground_imu       n=24064698 min_us=3 avg_us=22 max_us=2435 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] foreground_detector  n=24064698 min_us=2 avg_us=2 max_us=448 jitter_n=0 jitter_min=0 jitter_avg=0 jitter_max=0 missed=0
+[METRICS] load sums measured work regions; it is not full hardware CPU utilization.
+irhost> raw metrics events
+[METRICS] events queued=14 dropped=417
+[METRIC_EVENT] t_us=882433017 id=scheduler_missed task=button missed=2
+[METRIC_EVENT] t_us=882433037 id=scheduler_missed task=state_manager missed=2
+[METRIC_EVENT] t_us=882433056 id=scheduler_missed task=led missed=1
+[METRIC_EVENT] t_us=882433079 id=scheduler_missed task=cli missed=2
+[METRIC_EVENT] t_us=882433101 id=scheduler_missed task=config missed=2
+[METRIC_EVENT] t_us=882433123 id=scheduler_missed task=journal missed=2
+[METRIC_EVENT] t_us=884982382 id=scheduler_missed task=button missed=4
+[METRIC_EVENT] t_us=884982403 id=scheduler_missed task=state_manager missed=4
+[METRIC_EVENT] t_us=884982422 id=scheduler_missed task=led missed=1
+[METRIC_EVENT] t_us=884982443 id=scheduler_missed task=cli missed=4
+[METRIC_EVENT] t_us=884982465 id=scheduler_missed task=config missed=4
+[METRIC_EVENT] t_us=884982487 id=scheduler_missed task=journal missed=4
+[METRIC_EVENT] t_us=991747603 id=button_press arg=0
+[METRIC_EVENT] t_us=996927602 id=button_press arg=0
+irhost> raw metrics events
+[METRICS] events queued=0 dropped=417
+[METRICS] event queue is empty.
+irhost>

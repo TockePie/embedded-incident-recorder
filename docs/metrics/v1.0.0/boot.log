@@ -1,0 +1,29 @@
+Incident Recorder firmware starting...
+
+===============================================
+ INCIDENT RECORDER - STARTUP SELF-TEST
+===============================================
+[INFO] Diagnostic console: USART2, 115200 8N1
+[INFO] Keep device stationary during startup calibration
+[IMU] MPU-6050 I2C1 addr=0x68 WHO_AM_I=0x68 -> PASS
+[IMU] Config accel=+/-16g gyro=+/-500dps rate=200Hz DLPF_CFG=2 -> PASS
+[IMU] Stationary calibration samples=300 gyro_bias[mdps]=-2244,-229,-610 -> PASS
+[IMU] Accel gravity reference=1208mg common_scale=827/1000 -> APPLIED (startup orientation)
+[CAM] OV7670 XCLK=12.5MHz PA8_SPEED=HIGH PID=0x76 VER=0x73 MID=0x7FA2 SCCB_IDLE=1/1 -> PASS
+[FLASH] W25Q64 SPI2 JEDEC=EF 40 17 SR1=00 SR2=02 BUSY=0 WEL=0 BP=0 -> PASS
+-----------------------------------------------
+SELF-TEST: PASS
+SYSTEM: READY
+===============================================
+
+[APP] Startup checks passed; initial state=DISARMED.
+[CONFIG] loaded mode=CARGO sealed=0 generation=2.
+[CLI] USART1 command interface ready (115200 8-N-1, PA9/PA10).
+[HEALTH] runtime monitor initialized (MPU stale>150ms, flash/camera poll=2000ms)
+[JOURNAL] recovery PASS sector=1 generation=2 active_records=15 sectors=2 next_sequence=79
+[PHOTO] W25Q64 photo partition recovery started (cooperative).
+[PHOTO] camera ready mode=160x120 RGB565 bytes=38400; line service uses HREF interrupt
+[HEALTH] MPU-6050 sample stream OK age=1ms
+[HEALTH] W25Q64 runtime check PASS JEDEC=EF 40 17
+[HEALTH] OV7670 runtime SCCB check PASS PID=0x76 VER=0x73; photos available
+[PHOTO] recovery PASS scanned=1479 committed=49 occupied=490 free=1430 next=0x26A000

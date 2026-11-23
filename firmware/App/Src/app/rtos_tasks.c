@@ -94,8 +94,10 @@ static void CliTask(void *argument)
     TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
+        /* Прокидаємось миттєво при отриманні байта з UART1 (FromISR)
+         * або раз на 5 мс для фонових стейт-машин CLI (фото/експорт). */
+        RtosSync_WaitCliEvent(CLI_TASK_PERIOD_MS);
         App_StepCli();
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CLI_TASK_PERIOD_MS));
     }
 }
 

@@ -8,6 +8,8 @@ static SemaphoreHandle_t s_flash_mutex = NULL;
 static SemaphoreHandle_t s_uart_mutex  = NULL;
 static SemaphoreHandle_t s_state_mutex = NULL;
 
+static TaskHandle_t s_cli_task = NULL;
+
 static bool RtosSync_IsSchedulerRunning(void)
 {
     return (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING);
@@ -62,5 +64,26 @@ void RtosSync_UnlockState(void)
 {
     if ((s_state_mutex != NULL) && RtosSync_IsSchedulerRunning()) {
         (void)xSemaphoreGiveRecursive(s_state_mutex);
+    }
+}
+
+void RtosSync_RegisterCliTask(void *task_handle)
+{
+    s_cli_task = (TaskHandle_t)task_handle;
+}
+
+void RtosSync_WaitCliEvent(uint32_t timeout_ms)
+{
+    (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(timeout_ms));
+}
+
+void RtosSync_NotifyCliFromISR(void)
+{
+    TaskHandle_t task = s_cli_task;
+    BaseType_t higher_priority_task_woken = pdFALSE;
+
+    if (task != NULL) {
+        vTaskNotifyGiveFromISR(task, &higher_priority_task_woken);
+        portYIELD_FROM_ISR(higher_priority_task_woken);
     }
 }

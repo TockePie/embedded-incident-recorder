@@ -10,6 +10,7 @@
 #include "metrics/memory_metrics.h"
 #include "metrics/memory_metrics_test.h"
 #include "app/app.h"
+#include "app/rtos_sync.h"
 #include "usart.h"
 #include "stm32f4xx_hal.h"
 #include <ctype.h>
@@ -2507,6 +2508,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart) {
 			s_rx_byte = 0U;
 			if (HAL_UART_Receive_IT(&huart1, &s_rx_byte, 1U) != HAL_OK)
 				s_rx_restart_error_count++;
+			RtosSync_NotifyCliFromISR();
 			return;
 		}
 		if ((s_maintenance_lock != 0U) || (s_journal_export_active != 0U)) {
@@ -2528,6 +2530,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart) {
 		if (HAL_UART_Receive_IT(&huart1, &s_rx_byte, 1U) != HAL_OK) {
 			s_rx_restart_error_count++;
 		}
+		RtosSync_NotifyCliFromISR();
 	}
 }
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *uart) {

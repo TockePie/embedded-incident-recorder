@@ -28,6 +28,10 @@ void App_EnterFault(uint32_t fault_code);
 void App_StepButton(uint32_t now_ms);
 void App_StepStateManager(uint32_t now_ms);
 void App_StepHealthMonitor(uint32_t now_ms);
+void App_StepImu(void);
+void App_StepCamera(void);
+void App_StepStorage(void);
+void App_StepCli(void);
 
 #ifdef __cplusplus
 }

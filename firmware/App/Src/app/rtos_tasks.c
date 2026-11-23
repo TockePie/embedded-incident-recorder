@@ -4,37 +4,45 @@
 #include "task.h"
 
 #include "app/app.h"
+#include "app/rtos_sync.h"
 #include "metrics/metrics.h"
 #include "services/led_service.h"
 #include "stm32f4xx_hal.h"
 
-/* Розміри стеків у словах (1 слово = 4 байти на Cortex-M4) */
-#define APP_MAIN_TASK_STACK_SIZE    1024U
+/* Розміри стеків у словах (1 слово = 4 байти) */
+#define IMU_TASK_STACK_SIZE          512U
 #define CONTROL_TASK_STACK_SIZE      256U
+#define STORAGE_TASK_STACK_SIZE      512U
+#define CAMERA_TASK_STACK_SIZE       512U
+#define CLI_TASK_STACK_SIZE         1024U
 #define LED_TASK_STACK_SIZE          256U
 #define HEALTH_TASK_STACK_SIZE       256U
 
-/* Тимчасові пріоритети (configMAX_PRIORITIES = 6, отже діапазон 0..5).
- * Поки AppMainTask крутиться без затримок, її пріоритет має бути нижчим,
- * ніж у періодичних задач, інакше вони ніколи не отримають процесор. */
-#define APP_MAIN_TASK_PRIORITY      (tskIDLE_PRIORITY + 1U)
-#define LED_TASK_PRIORITY           (tskIDLE_PRIORITY + 2U)
-#define HEALTH_TASK_PRIORITY        (tskIDLE_PRIORITY + 2U)
-#define CONTROL_TASK_PRIORITY       (tskIDLE_PRIORITY + 3U)
+/* Фінальні пріоритети (configMAX_PRIORITIES = 6 -> 0..5) */
+#define IMU_TASK_PRIORITY           (tskIDLE_PRIORITY + 5U)
+#define CONTROL_TASK_PRIORITY       (tskIDLE_PRIORITY + 4U)
+#define STORAGE_TASK_PRIORITY       (tskIDLE_PRIORITY + 3U)
+#define CAMERA_TASK_PRIORITY        (tskIDLE_PRIORITY + 2U)
+#define CLI_TASK_PRIORITY           (tskIDLE_PRIORITY + 2U)
+#define LED_TASK_PRIORITY           (tskIDLE_PRIORITY + 1U)
+#define HEALTH_TASK_PRIORITY        (tskIDLE_PRIORITY + 1U)
 
-#define CONTROL_TASK_PERIOD_MS       5U
-#define LED_TASK_PERIOD_MS          10U
-#define HEALTH_TASK_PERIOD_MS      100U
+#define IMU_TASK_PERIOD_MS            5U
+#define CONTROL_TASK_PERIOD_MS        5U
+#define STORAGE_TASK_PERIOD_MS        5U
+#define CAMERA_TASK_PERIOD_MS         2U
+#define CLI_TASK_PERIOD_MS            5U
+#define LED_TASK_PERIOD_MS           10U
+#define HEALTH_TASK_PERIOD_MS       100U
 
-static void AppMainTask(void *argument)
+static void ImuTask(void *argument)
 {
     (void)argument;
+    TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
-        Metrics_LoopBegin();
-        App_RunOnce();
-        Metrics_LoopEnd();
-        Metrics_Poll();
+        App_StepImu();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(IMU_TASK_PERIOD_MS));
     }
 }
 
@@ -58,6 +66,39 @@ static void ControlTask(void *argument)
     }
 }
 
+static void StorageTask(void *argument)
+{
+    (void)argument;
+    TickType_t last_wake = xTaskGetTickCount();
+
+    for (;;) {
+        App_StepStorage();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(STORAGE_TASK_PERIOD_MS));
+    }
+}
+
+static void CameraTask(void *argument)
+{
+    (void)argument;
+    TickType_t last_wake = xTaskGetTickCount();
+
+    for (;;) {
+        App_StepCamera();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CAMERA_TASK_PERIOD_MS));
+    }
+}
+
+static void CliTask(void *argument)
+{
+    (void)argument;
+    TickType_t last_wake = xTaskGetTickCount();
+
+    for (;;) {
+        App_StepCli();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(CLI_TASK_PERIOD_MS));
+    }
+}
+
 static void LedTask(void *argument)
 {
     (void)argument;
@@ -65,7 +106,9 @@ static void LedTask(void *argument)
 
     for (;;) {
         Metrics_ExecBegin(METRICS_EXEC_TASK_LED, LED_TASK_PERIOD_MS);
+        RtosSync_LockState();
         LedService_Update(App_GetState(), HAL_GetTick());
+        RtosSync_UnlockState();
         Metrics_ExecEnd(METRICS_EXEC_TASK_LED);
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LED_TASK_PERIOD_MS));
@@ -82,14 +125,21 @@ static void HealthTask(void *argument)
         App_StepHealthMonitor(HAL_GetTick());
         Metrics_ExecEnd(METRICS_EXEC_TASK_HEALTH_MONITOR);
 
+        /* Оновлюємо 32-бітний DWT лічильник, щоб не було переповнення (~42.9 с) */
+        Metrics_Poll();
+
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(HEALTH_TASK_PERIOD_MS));
     }
 }
 
 bool RtosTasks_Start(void)
 {
-    if (xTaskCreate(AppMainTask, "AppMain", APP_MAIN_TASK_STACK_SIZE,
-        NULL, APP_MAIN_TASK_PRIORITY, NULL) != pdPASS) {
+    if (!RtosSync_Init()) {
+        return false;
+    }
+
+    if (xTaskCreate(ImuTask, "ImuTask", IMU_TASK_STACK_SIZE,
+        NULL, IMU_TASK_PRIORITY, NULL) != pdPASS) {
         return false;
         }
 
@@ -98,18 +148,31 @@ bool RtosTasks_Start(void)
             return false;
             }
 
-            if (xTaskCreate(LedTask, "LedTask", LED_TASK_STACK_SIZE,
-                NULL, LED_TASK_PRIORITY, NULL) != pdPASS) {
+            if (xTaskCreate(StorageTask, "StorageTask", STORAGE_TASK_STACK_SIZE,
+                NULL, STORAGE_TASK_PRIORITY, NULL) != pdPASS) {
                 return false;
                 }
 
-                if (xTaskCreate(HealthTask, "HealthTask", HEALTH_TASK_STACK_SIZE,
-                    NULL, HEALTH_TASK_PRIORITY, NULL) != pdPASS) {
+                if (xTaskCreate(CameraTask, "CameraTask", CAMERA_TASK_STACK_SIZE,
+                    NULL, CAMERA_TASK_PRIORITY, NULL) != pdPASS) {
                     return false;
                     }
 
-                    vTaskStartScheduler();
+                    if (xTaskCreate(CliTask, "CliTask", CLI_TASK_STACK_SIZE,
+                        NULL, CLI_TASK_PRIORITY, NULL) != pdPASS) {
+                        return false;
+                        }
 
-                /* Сюди виконання дійде лише якщо не вистачило RAM на Idle/Timer задачі */
-                return false;
+                        if (xTaskCreate(LedTask, "LedTask", LED_TASK_STACK_SIZE,
+                            NULL, LED_TASK_PRIORITY, NULL) != pdPASS) {
+                            return false;
+                            }
+
+                            if (xTaskCreate(HealthTask, "HealthTask", HEALTH_TASK_STACK_SIZE,
+                                NULL, HEALTH_TASK_PRIORITY, NULL) != pdPASS) {
+                                return false;
+                                }
+
+                                vTaskStartScheduler();
+                            return false;
 }

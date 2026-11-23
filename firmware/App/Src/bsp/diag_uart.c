@@ -6,6 +6,8 @@
 
 #include "usart.h"
 
+#include "app/rtos_sync.h"
+
 #define DIAG_UART_TIMEOUT_MS 1000U
 #define DIAG_UART_BUFFER_SIZE 192U
 
@@ -33,6 +35,8 @@ void DiagUART_Printf(const char *format, ...) {
 		transmit_length = (uint16_t) formatted_length;
 	}
 
+	RtosSync_LockDiagUart();
 	(void) HAL_UART_Transmit(&huart2, (uint8_t*) buffer, transmit_length,
-	DIAG_UART_TIMEOUT_MS);
+							 DIAG_UART_TIMEOUT_MS);
+	RtosSync_UnlockDiagUart();
 }

@@ -1,5 +1,6 @@
 #include "app/app.h"
 
+#include "app/rtos_sync.h"
 #include "app/app_scheduler.h"
 #include "metrics/metrics.h"
 #include "app/app_state.h"
@@ -350,4 +351,121 @@ void App_StepStateManager(uint32_t now_ms) {
 
 void App_StepHealthMonitor(uint32_t now_ms) {
 	AppTask_HealthMonitor(now_ms, NULL);
+}
+
+void App_StepImu(void)
+{
+	const ConfigData_t *config = NULL;
+	bool sealed = false;
+	uint32_t generation = 0U;
+	const MPU6050_Sample_t *sample;
+	uint32_t sequence;
+	uint32_t sample_tick;
+	bool is_armed;
+
+	if (!s_initialized) {
+		return;
+	}
+
+	Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_IMU, 0U);
+	Metrics_ProbeSet(METRICS_PROBE_IMU, true);
+	ImuService_RunOnce();
+	Metrics_ProbeSet(METRICS_PROBE_IMU, false);
+	Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_IMU);
+
+	RtosSync_LockFlash();
+	ConfigService_Get(&config, &sealed, &generation);
+	RtosSync_UnlockFlash();
+	(void)sealed;
+	(void)generation;
+
+	sample = ImuService_GetLatestSample();
+	sequence = ImuService_GetSampleSequence();
+	sample_tick = ImuService_GetLatestSampleTick();
+
+	if (config != NULL) {
+		const ConfigProfile_t *profile =
+		(config->mode == CONFIG_MODE_SITE) ? &config->site : &config->cargo;
+
+		RtosSync_LockState();
+		is_armed = (AppState_Get(&s_state_manager) == APP_STATE_ARMED);
+		RtosSync_UnlockState();
+
+		Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_DETECTOR, 0U);
+		IncidentDetector_ProcessSample(
+			is_armed,
+			(ConfigMode_t)config->mode, profile, sample, sequence, sample_tick);
+		Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_DETECTOR);
+
+		{
+			IncidentDetectorStats_t detector_stats;
+			uint32_t event_total;
+			IncidentDetector_GetStats(&detector_stats);
+			event_total = detector_stats.shock_events
+			+ detector_stats.tilt_events
+			+ detector_stats.temperature_events
+			+ detector_stats.vibration_events;
+			if (event_total != s_led_event_total) {
+				s_led_event_total = event_total;
+				(void)Metrics_EventPush(METRICS_EVENT_INCIDENT_COUNT_CHANGED, event_total);
+				RtosSync_LockState();
+				LedService_TriggerIncidentPattern(HAL_GetTick());
+				RtosSync_UnlockState();
+			}
+		}
+	}
+}
+
+void App_StepCamera(void)
+{
+	if (!s_initialized) {
+		return;
+	}
+
+	Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_CAMERA, 0U);
+	Metrics_ProbeSet(METRICS_PROBE_CAMERA, true);
+	OV7670_DvpCapture_Process();
+	PhotoCaptureService_Process();
+	Metrics_ProbeSet(METRICS_PROBE_CAMERA, false);
+	Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_CAMERA);
+}
+
+void App_StepStorage(void)
+{
+	if (!s_initialized) {
+		return;
+	}
+
+	RtosSync_LockFlash();
+
+	Metrics_ExecBegin(METRICS_EXEC_TASK_CONFIG, 5U);
+	ConfigService_Process();
+	StorageMaintenance_Process();
+	if (ConfigService_GetSaveStatus() == CONFIG_SAVE_ERROR) {
+		App_EnterFault(APP_FAULT_CONFIG_SAVE);
+	}
+	if (StorageMaintenance_GetStatus() == STORAGE_MAINTENANCE_ERROR) {
+		App_EnterFault(APP_FAULT_STORAGE_MAINTENANCE);
+	}
+	Metrics_ExecEnd(METRICS_EXEC_TASK_CONFIG);
+
+	Metrics_ExecBegin(METRICS_EXEC_TASK_JOURNAL, 5U);
+	IncidentJournal_Process();
+	PhotoStore_Process();
+	Metrics_ExecEnd(METRICS_EXEC_TASK_JOURNAL);
+
+	RtosSync_UnlockFlash();
+}
+
+void App_StepCli(void)
+{
+	if (!s_initialized) {
+		return;
+	}
+
+	Metrics_ExecBegin(METRICS_EXEC_TASK_CLI, 5U);
+	RtosSync_LockFlash();
+	CliService_Process();
+	RtosSync_UnlockFlash();
+	Metrics_ExecEnd(METRICS_EXEC_TASK_CLI);
 }

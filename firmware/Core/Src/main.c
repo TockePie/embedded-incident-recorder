@@ -27,6 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "services/led_service.h"
 #include "app/app.h"
 #include "metrics/metrics.h"
 #include "metrics/memory_metrics.h"
@@ -69,7 +70,11 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 #define APP_MAIN_TASK_STACK_SIZE    1024U
-#define APP_MAIN_TASK_PRIORITY      (tskIDLE_PRIORITY + 2U)
+#define APP_MAIN_TASK_PRIORITY      (tskIDLE_PRIORITY + 1U)
+
+#define LED_TASK_STACK_SIZE         256U
+#define LED_TASK_PRIORITY           (tskIDLE_PRIORITY + 2U)
+#define LED_TASK_PERIOD_MS          10U
 
 static void AppMainTask(void *argument)
 {
@@ -80,6 +85,20 @@ static void AppMainTask(void *argument)
 		App_RunOnce();
 		Metrics_LoopEnd();
 		Metrics_Poll();
+	}
+}
+
+static void LedTask(void *argument)
+{
+	(void)argument;
+	TickType_t last_wake = xTaskGetTickCount();
+
+	for (;;) {
+		Metrics_ExecBegin(METRICS_EXEC_TASK_LED, LED_TASK_PERIOD_MS);
+		LedService_Update(App_GetState(), HAL_GetTick());
+		Metrics_ExecEnd(METRICS_EXEC_TASK_LED);
+
+		vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LED_TASK_PERIOD_MS));
 	}
 }
 /* USER CODE END 0 */
@@ -137,21 +156,7 @@ int main(void) {
 #endif
 	/* USER CODE END 2 */
 
-	/* Keep the cooperative application loop running continuously. */
 	/* USER CODE BEGIN WHILE */
-	while (1) {
-		/* Measure one complete cooperative super-loop iteration. */
-		Metrics_LoopBegin();
-		/* Advance camera capture, sensor processing, and scheduled services. */
-		App_RunOnce();
-		Metrics_LoopEnd();
-		/* Extend the 32-bit DWT counter before it can wrap. */
-		Metrics_Poll();
-		/* USER CODE END WHILE */
-
-		/* USER CODE BEGIN 3 */
-	}
-
 	if (xTaskCreate(
 		AppMainTask,
 		"AppMain",
@@ -163,9 +168,24 @@ int main(void) {
 		Error_Handler();
 	}
 
+	if (xTaskCreate(
+		LedTask,
+		"LedTask",
+		LED_TASK_STACK_SIZE,
+		NULL,
+		LED_TASK_PRIORITY,
+		NULL) != pdPASS)
+	{
+		Error_Handler();
+	}
+
 	vTaskStartScheduler();
 
 	Error_Handler();
+	/* USER CODE END WHILE */
+
+	/* USER CODE BEGIN 3 */
+
 	/* USER CODE END 3 */
 }
 

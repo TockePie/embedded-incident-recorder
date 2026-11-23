@@ -75,10 +75,10 @@ static void AppTask_StateManager(uint32_t now_ms, void *context) {
 	}
 }
 
-static void AppTask_Led(uint32_t now_ms, void *context) {
-	(void) context;
-	LedService_Update(AppState_Get(&s_state_manager), now_ms);
-}
+// static void AppTask_Led(uint32_t now_ms, void *context) {
+// 	(void) context;
+// 	LedService_Update(AppState_Get(&s_state_manager), now_ms);
+// }
 
 static void AppTask_CLI(uint32_t now_ms, void *context) {
 	(void) now_ms;
@@ -128,11 +128,11 @@ static bool App_RegisterTasks(uint32_t now_ms) {
 		return false;
 	}
 
-	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Led, NULL,
-	APP_TASK_LED_PERIOD_MS, now_ms,
-			METRICS_EXEC_TASK_LED) != APP_SCHEDULER_OK) {
-		return false;
-	}
+	// if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Led, NULL,
+	// APP_TASK_LED_PERIOD_MS, now_ms,
+	// 		METRICS_EXEC_TASK_LED) != APP_SCHEDULER_OK) {
+	// 	return false;
+	// }
 
 	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_CLI, NULL,
 	APP_TASK_CLI_PERIOD_MS, now_ms,

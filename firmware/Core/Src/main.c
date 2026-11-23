@@ -35,6 +35,8 @@
 #include "metrics/metrics_test.h"
 volatile uint32_t g_metrics_test_result;
 #endif
+#include "FreeRTOS.h"
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,7 +68,20 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define APP_MAIN_TASK_STACK_SIZE    1024U
+#define APP_MAIN_TASK_PRIORITY      (tskIDLE_PRIORITY + 2U)
 
+static void AppMainTask(void *argument)
+{
+	(void)argument;
+
+	for (;;) {
+		Metrics_LoopBegin();
+		App_RunOnce();
+		Metrics_LoopEnd();
+		Metrics_Poll();
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -136,6 +151,21 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 	}
+
+	if (xTaskCreate(
+		AppMainTask,
+		"AppMain",
+		APP_MAIN_TASK_STACK_SIZE,
+		NULL,
+		APP_MAIN_TASK_PRIORITY,
+		NULL) != pdPASS)
+	{
+		Error_Handler();
+	}
+
+	vTaskStartScheduler();
+
+	Error_Handler();
 	/* USER CODE END 3 */
 }
 

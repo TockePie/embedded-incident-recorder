@@ -36,6 +36,7 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+Core/Src/stm32f4xx_hal_timebase_tim.c \
 Core/Src/main.c \
 Core/Src/gpio.c \
 Core/Src/dma.c \
@@ -68,7 +69,16 @@ Core/Src/system_stm32f4xx.c \
 Core/Src/sysmem.c \
 Core/Src/syscalls.c
 
-C_SOURCES += $(wildcard App/Src/*/*.c)  
+C_SOURCES += $(wildcard App/Src/*/*.c)
+# FreeRTOS Kernel
+C_SOURCES += \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/tasks.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/queue.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/list.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/timers.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/stream_buffer.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c \
+Middlewares/FreeRTOS/FreeRTOS-Kernel/portable/MemMang/heap_4.c
 
 # ASM sources
 ASM_SOURCES =  \
@@ -136,6 +146,9 @@ C_INCLUDES =  \
 -IDrivers/CMSIS/Include
 
 C_INCLUDES += -IApp/Inc
+# FreeRTOS include paths
+C_INCLUDES += -IMiddlewares/FreeRTOS/FreeRTOS-Kernel/include
+C_INCLUDES += -IMiddlewares/FreeRTOS/FreeRTOS-Kernel/portable/GCC/ARM_CM4F
 
 
 # compile gcc flags
@@ -171,15 +184,15 @@ all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET
 # build the application
 #######################################
 # list of objects
-OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
-vpath %.c $(sort $(dir $(C_SOURCES)))
+OBJECTS = $(addprefix $(BUILD_DIR)/,$(C_SOURCES:.c=.o))
 # list of ASM program objects
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASMM_SOURCES:.S=.o)))
 vpath %.S $(sort $(dir $(ASMM_SOURCES)))
 
-$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
+$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)

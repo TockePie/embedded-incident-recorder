@@ -247,6 +247,9 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *tim_baseHandle) {
 		/* USER CODE BEGIN TIM3_MspInit 1 */
 
 		/* USER CODE END TIM3_MspInit 1 */
+	} else if (tim_baseHandle->Instance == TIM4) {
+		/* TIM4 clock enable for HAL time base */
+		__HAL_RCC_TIM4_CLK_ENABLE();
 	}
 }
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *timHandle) {
@@ -313,6 +316,8 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef *tim_baseHandle) {
 		/* USER CODE BEGIN TIM3_MspDeInit 1 */
 
 		/* USER CODE END TIM3_MspDeInit 1 */
+	} else if (tim_baseHandle->Instance == TIM4) {
+		__HAL_RCC_TIM4_CLK_DISABLE();
 	}
 }
 

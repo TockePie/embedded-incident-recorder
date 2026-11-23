@@ -116,17 +116,17 @@ static void AppTask_HealthMonitor(uint32_t now_ms, void *context) {
 }
 
 static bool App_RegisterTasks(uint32_t now_ms) {
-	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Button, NULL,
-	APP_TASK_BUTTON_PERIOD_MS, now_ms,
-			METRICS_EXEC_TASK_BUTTON) != APP_SCHEDULER_OK) {
-		return false;
-	}
-
-	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_StateManager, NULL,
-	APP_TASK_STATE_PERIOD_MS, now_ms,
-			METRICS_EXEC_TASK_STATE_MANAGER) != APP_SCHEDULER_OK) {
-		return false;
-	}
+	// if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Button, NULL,
+	// APP_TASK_BUTTON_PERIOD_MS, now_ms,
+	// 		METRICS_EXEC_TASK_BUTTON) != APP_SCHEDULER_OK) {
+	// 	return false;
+	// }
+ //
+	// if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_StateManager, NULL,
+	// APP_TASK_STATE_PERIOD_MS, now_ms,
+	// 		METRICS_EXEC_TASK_STATE_MANAGER) != APP_SCHEDULER_OK) {
+	// 	return false;
+	// }
 
 	// if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_Led, NULL,
 	// APP_TASK_LED_PERIOD_MS, now_ms,
@@ -152,11 +152,11 @@ static bool App_RegisterTasks(uint32_t now_ms) {
 		return false;
 	}
 
-	if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_HealthMonitor, NULL,
-	APP_TASK_HEALTH_PERIOD_MS, now_ms,
-			METRICS_EXEC_TASK_HEALTH_MONITOR) != APP_SCHEDULER_OK) {
-		return false;
-	}
+	// if (AppScheduler_AddPeriodic(&s_scheduler, AppTask_HealthMonitor, NULL,
+	// APP_TASK_HEALTH_PERIOD_MS, now_ms,
+	// 		METRICS_EXEC_TASK_HEALTH_MONITOR) != APP_SCHEDULER_OK) {
+	// 	return false;
+	// }
 
 	return true;
 }
@@ -338,4 +338,16 @@ void App_EnterFault(uint32_t fault_code) {
 		AppState_EnterFault(&s_state_manager, fault_code);
 		(void) Metrics_EventPush(METRICS_EVENT_FAULT_ENTERED, fault_code);
 	}
+}
+
+void App_StepButton(uint32_t now_ms) {
+	AppTask_Button(now_ms, NULL);
+}
+
+void App_StepStateManager(uint32_t now_ms) {
+	AppTask_StateManager(now_ms, NULL);
+}
+
+void App_StepHealthMonitor(uint32_t now_ms) {
+	AppTask_HealthMonitor(now_ms, NULL);
 }

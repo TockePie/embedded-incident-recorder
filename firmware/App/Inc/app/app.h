@@ -25,6 +25,10 @@ AppState_t App_GetState(void);
 /** Enter the latched FAULT state until reset or explicit recovery. */
 void App_EnterFault(uint32_t fault_code);
 
+void App_StepButton(uint32_t now_ms);
+void App_StepStateManager(uint32_t now_ms);
+void App_StepHealthMonitor(uint32_t now_ms);
+
 #ifdef __cplusplus
 }
 #endif

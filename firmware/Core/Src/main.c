@@ -27,8 +27,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "services/led_service.h"
 #include "app/app.h"
+#include "app/rtos_tasks.h"
 #include "metrics/metrics.h"
 #include "metrics/memory_metrics.h"
 #include "metrics/metrics_config.h"
@@ -36,8 +36,6 @@
 #include "metrics/metrics_test.h"
 volatile uint32_t g_metrics_test_result;
 #endif
-#include "FreeRTOS.h"
-#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,32 +73,6 @@ void SystemClock_Config(void);
 #define LED_TASK_STACK_SIZE         256U
 #define LED_TASK_PRIORITY           (tskIDLE_PRIORITY + 2U)
 #define LED_TASK_PERIOD_MS          10U
-
-static void AppMainTask(void *argument)
-{
-	(void)argument;
-
-	for (;;) {
-		Metrics_LoopBegin();
-		App_RunOnce();
-		Metrics_LoopEnd();
-		Metrics_Poll();
-	}
-}
-
-static void LedTask(void *argument)
-{
-	(void)argument;
-	TickType_t last_wake = xTaskGetTickCount();
-
-	for (;;) {
-		Metrics_ExecBegin(METRICS_EXEC_TASK_LED, LED_TASK_PERIOD_MS);
-		LedService_Update(App_GetState(), HAL_GetTick());
-		Metrics_ExecEnd(METRICS_EXEC_TASK_LED);
-
-		vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LED_TASK_PERIOD_MS));
-	}
-}
 /* USER CODE END 0 */
 
 /**
@@ -157,31 +129,9 @@ int main(void) {
 	/* USER CODE END 2 */
 
 	/* USER CODE BEGIN WHILE */
-	if (xTaskCreate(
-		AppMainTask,
-		"AppMain",
-		APP_MAIN_TASK_STACK_SIZE,
-		NULL,
-		APP_MAIN_TASK_PRIORITY,
-		NULL) != pdPASS)
-	{
+	if (!RtosTasks_Start()) {
 		Error_Handler();
 	}
-
-	if (xTaskCreate(
-		LedTask,
-		"LedTask",
-		LED_TASK_STACK_SIZE,
-		NULL,
-		LED_TASK_PRIORITY,
-		NULL) != pdPASS)
-	{
-		Error_Handler();
-	}
-
-	vTaskStartScheduler();
-
-	Error_Handler();
 	/* USER CODE END WHILE */
 
 	/* USER CODE BEGIN 3 */

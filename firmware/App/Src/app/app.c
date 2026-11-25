@@ -425,7 +425,6 @@ void App_StepCamera(void)
 	Metrics_ExecBegin(METRICS_EXEC_FOREGROUND_CAMERA, 0U);
 	Metrics_ProbeSet(METRICS_PROBE_CAMERA, true);
 	OV7670_DvpCapture_Process();
-	PhotoCaptureService_Process();
 	Metrics_ProbeSet(METRICS_PROBE_CAMERA, false);
 	Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_CAMERA);
 }
@@ -452,6 +451,7 @@ void App_StepStorage(void)
 	Metrics_ExecBegin(METRICS_EXEC_TASK_JOURNAL, 5U);
 	IncidentJournal_Process();
 	PhotoStore_Process();
+	PhotoCaptureService_Process();
 	Metrics_ExecEnd(METRICS_EXEC_TASK_JOURNAL);
 
 	RtosSync_UnlockFlash();

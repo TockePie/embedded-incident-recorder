@@ -9,6 +9,8 @@
 #include "metrics/metrics.h"
 #include "metrics/memory_metrics.h"
 #include "metrics/memory_metrics_test.h"
+#include "metrics/rtos_metrics.h"
+#include "FreeRTOS.h"
 #include "app/app.h"
 #include "app/rtos_sync.h"
 #include "usart.h"
@@ -894,8 +896,11 @@ static void Cli_PrintHelp(void) {
 					" status - show system state and diagnostics\r\n"
 					" metrics - show timing, jitter, missed periods and foreground load\r\n"
 					" metrics events - show and drain the metrics event FIFO\r\n"
+					" metrics imu [reset] - IMU sample interval, missed samples, first-sample time\r\n"
 					" memory - show Flash/RAM/heap/stack usage\r\n"
 					" memory test - run memory metrics self-test\r\n"
+					" rtos tasks|stacks|heap|cost - FreeRTOS CPU time, stacks, OS heap, tick/switch cost (alias: tasks)\r\n"
+					" rtos trace start|stop|dump [from] - task switch timeline\r\n"
 					" config - show Cargo/Site profiles and storage status\r\n"
 					" config mode cargo|site\r\n"
 					" config cargo shock <mg>|tilt <deg>|temp <minC> <maxC>\r\n"
@@ -1085,6 +1090,249 @@ static void Cli_PrintMetricEvents(void) {
 			Cli_Printf("[METRICS] %lu events remain; run 'metrics events' again to continue.\r\n",
 					(unsigned long) status.count);
 		}
+	}
+}
+
+static void Cli_PrintMetricsImu(void) {
+	Metrics_ImuSampleStats_t stats;
+	char min_text[21];
+	char avg_text[21];
+	char max_text[21];
+	char jitter_min_text[22];
+	char jitter_avg_text[22];
+	char jitter_max_text[22];
+	uint64_t avg_us = 0ULL;
+	int64_t period_us;
+
+	if (!Metrics_ImuSampleStatsGet(&stats)) {
+		Cli_TxWrite("ERR: metrics are not initialized.\r\n");
+		return;
+	}
+
+	period_us = (int64_t) stats.period_ms * 1000LL;
+	if (stats.count != 0U) {
+		avg_us = stats.total_interval_us / stats.count;
+	}
+	Cli_U64ToString(stats.min_interval_us, min_text);
+	Cli_U64ToString(avg_us, avg_text);
+	Cli_U64ToString(stats.max_interval_us, max_text);
+	Cli_I64ToString((stats.count != 0U) ?
+			((int64_t) stats.min_interval_us - period_us) : 0LL, jitter_min_text);
+	Cli_I64ToString((stats.count != 0U) ?
+			((int64_t) avg_us - period_us) : 0LL, jitter_avg_text);
+	Cli_I64ToString((stats.count != 0U) ?
+			((int64_t) stats.max_interval_us - period_us) : 0LL, jitter_max_text);
+
+	Cli_Printf("[METRICS] imu_sample n=%lu period_ms=%lu min_us=%s avg_us=%s max_us=%s missed=%lu first_sample_ms=%lu\r\n",
+			(unsigned long) stats.count, (unsigned long) stats.period_ms,
+			min_text, avg_text, max_text, (unsigned long) stats.missed,
+			(unsigned long) stats.first_sample_tick_ms);
+	Cli_Printf("[METRICS] imu_sample_jitter jitter_min=%s jitter_avg=%s jitter_max=%s\r\n",
+			jitter_min_text, jitter_avg_text, jitter_max_text);
+	Cli_Printf("[METRICS] dwt_anomalies=%lu\r\n",
+			(unsigned long) Metrics_DwtAnomalyCountGet());
+}
+
+/* ---------- Lab 4: FreeRTOS metrics ---------- */
+static void Cli_PrintRtosTasks(void) {
+	RtosMetrics_TaskInfo_t tasks[METRICS_RTOS_MAX_TASKS];
+	uint64_t total_cycles = 0ULL;
+	uint64_t sum_cycles = 0ULL;
+	uint32_t count;
+	uint32_t i;
+	char total_text[21];
+	char sum_text[21];
+
+	count = RtosMetrics_TaskSnapshot(tasks, METRICS_RTOS_MAX_TASKS,
+			&total_cycles);
+	for (i = 0U; i < count; ++i) {
+		sum_cycles += tasks[i].run_cycles;
+	}
+	Cli_U64ToString(total_cycles, total_text);
+	Cli_U64ToString(sum_cycles, sum_text);
+	Cli_Printf("[RTOS] TASKS count=%lu core_hz=%lu total_cycles=%s sum_task_cycles=%s\r\n",
+			(unsigned long) count, (unsigned long) SystemCoreClock, total_text,
+			sum_text);
+
+	for (i = 0U; i < count; ++i) {
+		char cycles_text[21];
+		char us_text[21];
+		const uint32_t share_permille = (sum_cycles != 0ULL) ?
+				(uint32_t) ((tasks[i].run_cycles * 1000ULL) / sum_cycles) : 0U;
+
+		Cli_U64ToString(tasks[i].run_cycles, cycles_text);
+		Cli_U64ToString(Metrics_CyclesToUs(tasks[i].run_cycles), us_text);
+		Cli_Printf("[RTOS] TASK name=%s num=%lu prio=%lu state=%c run_cycles=%s run_us=%s share=%u.%u%%\r\n",
+				tasks[i].name, (unsigned long) tasks[i].task_number,
+				(unsigned long) tasks[i].priority, tasks[i].state, cycles_text,
+				us_text, (unsigned int) (share_permille / 10U),
+				(unsigned int) (share_permille % 10U));
+	}
+	Cli_TxWrite("[RTOS] share is the part of the summed task CPU time (IDLE = free CPU); take two snapshots and subtract them for one scenario.\r\n");
+}
+
+static void Cli_PrintRtosStacks(void) {
+	RtosMetrics_TaskInfo_t tasks[METRICS_RTOS_MAX_TASKS];
+	uint32_t count;
+	uint32_t i;
+
+	count = RtosMetrics_TaskSnapshot(tasks, METRICS_RTOS_MAX_TASKS, NULL);
+	for (i = 0U; i < count; ++i) {
+		const uint32_t size = tasks[i].stack_size_words;
+		const uint32_t free_min = tasks[i].stack_free_min_words;
+
+		if ((size != 0U) && (size >= free_min)) {
+			const uint32_t used = size - free_min;
+			Cli_Printf("[RTOS] STACK task=%s size_words=%lu free_min_words=%lu used_max_words=%lu used_max_bytes=%lu\r\n",
+					tasks[i].name, (unsigned long) size,
+					(unsigned long) free_min, (unsigned long) used,
+					(unsigned long) (used * 4UL));
+		} else {
+			Cli_Printf("[RTOS] STACK task=%s size_words=na free_min_words=%lu used_max_words=na used_max_bytes=na\r\n",
+					tasks[i].name, (unsigned long) free_min);
+		}
+	}
+	Cli_TxWrite("[RTOS] free_min is the high-water mark since boot; run it after the worst-case scenario. MSP stack: see 'memory'.\r\n");
+}
+
+static void Cli_PrintRtosHeap(void) {
+	RtosMetrics_Heap_t heap;
+
+	RtosMetrics_HeapGet(&heap);
+	Cli_Printf("[RTOS] HEAP total=%lu free=%lu min_ever_free=%lu used_peak=%lu\r\n",
+			(unsigned long) heap.total_bytes, (unsigned long) heap.free_bytes,
+			(unsigned long) heap.min_ever_free_bytes,
+			(unsigned long) heap.used_peak_bytes);
+	Cli_TxWrite("[RTOS] the OS heap array is part of .bss, so it is already included in 'memory' static RAM.\r\n");
+}
+
+static void Cli_PrintRtosCost(void) {
+	RtosMetrics_CycleStats_t tick;
+	RtosMetrics_CycleStats_t gap;
+	uint32_t switches = 0U;
+	uint32_t tick_avg = 0U;
+	uint32_t gap_avg = 0U;
+	uint32_t tick_period_cycles;
+	uint32_t overhead_ppm = 0U;
+
+	RtosMetrics_TickStatsGet(&tick);
+	RtosMetrics_SwitchStatsGet(&gap, &switches);
+	if (tick.count != 0U) {
+		tick_avg = (uint32_t) (tick.total_cycles / tick.count);
+	}
+	if (gap.count != 0U) {
+		gap_avg = (uint32_t) (gap.total_cycles / gap.count);
+	}
+	tick_period_cycles = SystemCoreClock / (uint32_t) configTICK_RATE_HZ;
+	if (tick_period_cycles != 0U) {
+		overhead_ppm = (uint32_t) (((uint64_t) tick_avg * 1000000ULL)
+				/ tick_period_cycles);
+	}
+
+	Cli_Printf("[RTOS] CLOCK core_hz=%lu tick_hz=%lu\r\n",
+			(unsigned long) SystemCoreClock, (unsigned long) configTICK_RATE_HZ);
+	Cli_Printf("[RTOS] TICK n=%lu min_cycles=%lu avg_cycles=%lu max_cycles=%lu overhead_ppm=%lu\r\n",
+			(unsigned long) tick.count, (unsigned long) tick.min_cycles,
+			(unsigned long) tick_avg, (unsigned long) tick.max_cycles,
+			(unsigned long) overhead_ppm);
+	Cli_Printf("[RTOS] SWITCH n=%lu gap_min_cycles=%lu gap_avg_cycles=%lu gap_max_cycles=%lu\r\n",
+			(unsigned long) switches, (unsigned long) gap.min_cycles,
+			(unsigned long) gap_avg, (unsigned long) gap.max_cycles);
+	Cli_TxWrite("[RTOS] TICK = xPortSysTickHandler only (no exception entry/exit). SWITCH gap = vTaskSwitchContext only (no PendSV register save/restore).\r\n");
+}
+
+static void Cli_PrintRtosTraceDump(uint32_t from) {
+	RtosMetrics_TaskInfo_t tasks[METRICS_RTOS_MAX_TASKS];
+	uint32_t task_count;
+	const uint32_t total = RtosMetrics_TraceCount();
+	const uint32_t max_lines = 32U;
+	uint32_t index;
+	uint32_t printed = 0U;
+
+	if (RtosMetrics_TraceIsActive()) {
+		RtosMetrics_TraceStop();
+	}
+	task_count = RtosMetrics_TaskSnapshot(tasks, METRICS_RTOS_MAX_TASKS, NULL);
+
+	Cli_Printf("[RTOS] TRACE n=%lu dropped=%lu core_hz=%lu\r\n",
+			(unsigned long) total, (unsigned long) RtosMetrics_TraceDropped(),
+			(unsigned long) SystemCoreClock);
+	for (index = from; (index < total) && (printed < max_lines); ++index) {
+		RtosMetrics_TraceEntry_t entry;
+		const char *name = "?";
+		uint32_t t;
+
+		if (!RtosMetrics_TraceGet(index, &entry)) {
+			break;
+		}
+		for (t = 0U; t < task_count; ++t) {
+			if (tasks[t].task_number == entry.task_number) {
+				name = tasks[t].name;
+				break;
+			}
+		}
+		Cli_Printf("[RTOS] SWITCH_IN idx=%lu cycles=%lu task=%lu name=%s\r\n",
+				(unsigned long) index, (unsigned long) entry.cycles,
+				(unsigned long) entry.task_number, name);
+		printed++;
+	}
+	if (printed == 0U) {
+		Cli_TxWrite("[RTOS] trace buffer is empty or 'from' is past the end.\r\n");
+	} else if (index < total) {
+		Cli_Printf("[RTOS] %lu entries remain; run 'rtos trace dump %lu' to continue.\r\n",
+				(unsigned long) (total - index), (unsigned long) index);
+	}
+}
+
+static void Cli_HandleRtosTrace(char *arguments) {
+	while (isspace((unsigned char) *arguments) != 0) {
+		arguments++;
+	}
+
+	if (strcmp(arguments, "start") == 0) {
+		RtosMetrics_TraceStart();
+		Cli_Printf("[RTOS] trace started: records the first %lu task switches.\r\n",
+				(unsigned long) METRICS_RTOS_TRACE_CAPACITY);
+	} else if (strcmp(arguments, "stop") == 0) {
+		RtosMetrics_TraceStop();
+		Cli_Printf("[RTOS] trace stopped: %lu entries.\r\n",
+				(unsigned long) RtosMetrics_TraceCount());
+	} else if (strncmp(arguments, "dump", 4) == 0) {
+		uint32_t from = 0U;
+		char *rest = &arguments[4];
+
+		while (isspace((unsigned char) *rest) != 0) {
+			rest++;
+		}
+		if (*rest != '\0') {
+			char *end = NULL;
+			const unsigned long parsed = strtoul(rest, &end, 10);
+			if ((end == rest) || (*end != '\0')) {
+				Cli_TxWrite("Usage: rtos trace dump [from]\r\n");
+				return;
+			}
+			from = (uint32_t) parsed;
+		}
+		Cli_PrintRtosTraceDump(from);
+	} else {
+		Cli_TxWrite("Usage: rtos trace start|stop|dump [from]\r\n");
+	}
+}
+
+static void Cli_HandleRtos(char *arguments) {
+	if (strcmp(arguments, "tasks") == 0) {
+		Cli_PrintRtosTasks();
+	} else if (strcmp(arguments, "stacks") == 0) {
+		Cli_PrintRtosStacks();
+	} else if (strcmp(arguments, "heap") == 0) {
+		Cli_PrintRtosHeap();
+	} else if (strcmp(arguments, "cost") == 0) {
+		Cli_PrintRtosCost();
+	} else if ((strncmp(arguments, "trace", 5) == 0)
+			&& ((arguments[5] == '\0') || (isspace((unsigned char) arguments[5]) != 0))) {
+		Cli_HandleRtosTrace(&arguments[5]);
+	} else {
+		Cli_TxWrite("Usage: rtos tasks|stacks|heap|cost|trace start|stop|dump [from]\r\n");
 	}
 }
 
@@ -2168,8 +2416,13 @@ static void Cli_ExecuteLine(char *line) {
 			Cli_PrintMetrics();
 		} else if (strcmp(argument, "events") == 0) {
 			Cli_PrintMetricEvents();
+		} else if (strcmp(argument, "imu") == 0) {
+			Cli_PrintMetricsImu();
+		} else if (strcmp(argument, "imu reset") == 0) {
+			Metrics_ImuSampleStatsReset();
+			Cli_TxWrite("[METRICS] imu_sample statistics reset.\r\n");
 		} else {
-			Cli_TxWrite("Usage: metrics | metrics events\r\n");
+			Cli_TxWrite("Usage: metrics | metrics events | metrics imu [reset]\r\n");
 		}
 	} else if (strcmp(start, "memory") == 0) {
 		if (*argument == '\0') {
@@ -2179,6 +2432,13 @@ static void Cli_ExecuteLine(char *line) {
 		} else {
 			Cli_TxWrite("Usage: memory | memory test\r\n");
 		}
+	} else if (strcmp(start, "rtos") == 0) {
+		Cli_HandleRtos(argument);
+	} else if (strcmp(start, "tasks") == 0) {
+		if (*argument == '\0')
+			Cli_PrintRtosTasks();
+		else
+			Cli_TxWrite("ERR: tasks takes no arguments\r\n");
 	} else if (strcmp(start, "config") == 0) {
 		Cli_HandleConfig(argument);
 	} else if (strcmp(start, "journal") == 0) {

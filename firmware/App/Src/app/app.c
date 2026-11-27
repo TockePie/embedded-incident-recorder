@@ -372,6 +372,12 @@ void App_StepImu(void)
 	ImuService_RunOnce();
 	Metrics_ProbeSet(METRICS_PROBE_IMU, false);
 	Metrics_ExecEnd(METRICS_EXEC_FOREGROUND_IMU);
+	
+	/* Metric: interval between new IMU samples. Placed right after the
+	 * read and before RtosSync_LockFlash(), so that waiting for the Flash
+	 * mutex is not counted into the sample interval. */
+	Metrics_ImuSampleObserve(ImuService_GetSampleSequence(),
+			ImuService_GetLatestSampleTick(), METRICS_IMU_SAMPLE_PERIOD_MS);
 
 	RtosSync_LockFlash();
 	ConfigService_Get(&config, &sealed, &generation);

@@ -1,8 +1,9 @@
-
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
 #include <stdint.h>
+
+#include "metrics/metrics_config.h"
 
 /* Clock and tick configuration */
 #define configCPU_CLOCK_HZ                  (100000000UL)
@@ -58,10 +59,36 @@
 /* Handler names */
 #define vPortSVCHandler      SVC_Handler
 #define xPortPendSVHandler   PendSV_Handler
+/* With METRICS_RTOS_TICK_PROBE the SysTick_Handler is defined in
+ * freertos_hooks.c: it times xPortSysTickHandler() and then calls it. */
+#if (METRICS_RTOS_TICK_PROBE == 0U)
 #define xPortSysTickHandler  SysTick_Handler
+#endif
 
-/* Runtime statistics */
+/* Runtime statistics and kernel diagnostics.
+ * - configUSE_TRACE_FACILITY: needed for uxTaskGetSystemState() and for the
+ *   task number used by the timeline (TCB field uxTCBNumber).
+ * - Run-time counter: the 64-bit DWT time line of metrics.c. A plain 32-bit
+ *   CYCCNT wraps every 42.95 s at 100 MHz, scenarios last longer.
+ * - traceTASK_SWITCHED_OUT/IN: context-switch count, scheduler time and the
+ *   task timeline (rtos_metrics.c).
+ * METRICS_RTOS_STATS_ENABLE 0 builds without them, to measure their cost. */
+#define configUSE_TRACE_FACILITY            1
+#if (METRICS_RTOS_STATS_ENABLE != 0U)
+#define configGENERATE_RUN_TIME_STATS       1
+#define configRUN_TIME_COUNTER_TYPE         uint64_t
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()   ((void)0) /* DWT is enabled by Metrics_Init() before the scheduler starts */
+#define portGET_RUN_TIME_COUNTER_VALUE()    Metrics_NowCycles()
+#ifndef __ASSEMBLER__
+extern uint64_t Metrics_NowCycles(void);
+extern void RtosMetrics_OnSwitchedOut(void);
+extern void RtosMetrics_OnSwitchedIn(uint32_t task_number);
+#endif
+#define traceTASK_SWITCHED_OUT()            RtosMetrics_OnSwitchedOut()
+#define traceTASK_SWITCHED_IN()             RtosMetrics_OnSwitchedIn((uint32_t)pxCurrentTCB->uxTCBNumber)
+#else
 #define configGENERATE_RUN_TIME_STATS       0
+#endif
 
 /* API inclusion */
 #define INCLUDE_vTaskDelay                  1

@@ -88,7 +88,9 @@ bool Metrics_Init(void);
 bool Metrics_IsReady(void);
 
 /** Update the 64-bit cycle-time extension. Must be called at least once per
- *  32-bit CYCCNT wrap (about 42.95 s at 100 MHz). Foreground context only.
+ *  32-bit CYCCNT wrap (about 42.95 s at 100 MHz). Safe from any task and from
+ *  interrupt/PendSV context: the shared state is updated in a short PRIMASK
+ *  critical section.
  */
 void Metrics_Poll(void);
 uint64_t Metrics_NowCycles(void);
@@ -122,6 +124,29 @@ void Metrics_ExecMissedPeriods(Metrics_ExecId_t id, uint32_t missed_periods);
 void Metrics_ExecStatsReset(Metrics_ExecId_t id);
 bool Metrics_ExecStatsGet(Metrics_ExecId_t id, Metrics_ExecStats_t *stats);
 const char* Metrics_ExecIdName(Metrics_ExecId_t id);
+
+/** Number of times CYCCNT went backwards without being a real 32-bit wrap
+ *  (for example because other code cleared DWT->CYCCNT). Expected: 0. */
+uint32_t Metrics_DwtAnomalyCountGet(void);
+
+/** Interval between successive new IMU samples, as seen by the application.
+ *  Call after every ImuService_RunOnce(); it only records when the sample
+ *  sequence number changed. Works in the super-loop and in the RTOS build.
+ *  interval = time between two observations of a new sample (microseconds). */
+typedef struct {
+	uint32_t count;              /* number of measured intervals */
+	uint32_t missed;             /* skipped sample periods (same formula as tasks) */
+	uint32_t period_ms;          /* expected period passed by the caller */
+	uint32_t first_sample_tick_ms; /* HAL tick of the first valid sample */
+	uint64_t min_interval_us;
+	uint64_t max_interval_us;
+	uint64_t total_interval_us;
+} Metrics_ImuSampleStats_t;
+
+void Metrics_ImuSampleObserve(uint32_t sequence, uint32_t sample_tick_ms,
+		uint32_t period_ms);
+bool Metrics_ImuSampleStatsGet(Metrics_ImuSampleStats_t *stats);
+void Metrics_ImuSampleStatsReset(void);
 
 /** Fixed-size event FIFO. On overflow, the oldest event is discarded. */
 bool Metrics_EventPush(uint16_t id, uint32_t argument);

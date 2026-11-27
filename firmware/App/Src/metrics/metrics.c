@@ -33,6 +33,13 @@ static uint32_t s_event_read;
 static uint32_t s_event_write;
 static uint32_t s_event_dropped;
 
+static uint32_t s_dwt_anomaly_count;
+static Metrics_ImuSampleStats_t s_imu_stats;
+static uint32_t s_imu_last_sequence;
+static uint64_t s_imu_last_cycles;
+static bool s_imu_have_last;
+static bool s_imu_first_seen;
+
 static const uint16_t s_probe_pins[METRICS_PROBE_COUNT] = {
 GPIO_PIN_4, GPIO_PIN_0, GPIO_PIN_1, GPIO_PIN_10 };
 static GPIO_TypeDef *const s_probe_ports[METRICS_PROBE_COUNT] = {
@@ -45,16 +52,54 @@ static const char *const s_exec_names[METRICS_EXEC_ID_COUNT] = { "button",
 		"state_manager", "led", "cli", "config", "journal", "health_monitor",
 		"foreground_camera", "foreground_imu", "foreground_detector" };
 
-static void Metrics_UpdateCycleEpoch(void) {
+/* Metrics are used from several RTOS tasks, from PendSV (run-time stats) and
+ * from the CLI task. Shared state is therefore updated in very short critical
+ * sections that only mask interrupts through PRIMASK (a few cycles). This
+ * works from task, ISR and PendSV context and does not use the FreeRTOS API. */
+static inline uint32_t Metrics_CriticalEnter(void) {
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	return primask;
+}
+
+static inline void Metrics_CriticalExit(uint32_t primask) {
+	__set_PRIMASK(primask);
+}
+
+/* Must be called with interrupts masked. */
+static void Metrics_UpdateCycleEpochLocked(void) {
 	const uint32_t current = DWT->CYCCNT;
 
 	/* Unsigned wrap detection is valid because Metrics_Poll() is called much
-	 * more frequently than once per 2^32 cycles. */
+	 * more frequently than once per 2^32 cycles. A decrease from a small
+	 * previous value cannot be a wrap: count it as an anomaly instead of
+	 * adding a bogus 2^32 cycles to the timeline. */
 	if (current < s_last_cycle) {
-		s_cycle_epoch += (1ULL << 32);
+		if (s_last_cycle >= METRICS_DWT_WRAP_MIN_LAST) {
+			s_cycle_epoch += (1ULL << 32);
+		} else if (s_dwt_anomaly_count < UINT32_MAX) {
+			s_dwt_anomaly_count++;
+		}
 	}
 
 	s_last_cycle = current;
+}
+
+static void Metrics_UpdateCycleEpoch(void) {
+	const uint32_t primask = Metrics_CriticalEnter();
+	Metrics_UpdateCycleEpochLocked();
+	Metrics_CriticalExit(primask);
+}
+
+/* Epoch and last-cycle value are combined inside one critical section, so a
+ * preempting context cannot make the 64-bit value jump by 2^32. */
+static uint64_t Metrics_ReadCycles64(void) {
+	uint64_t value;
+	const uint32_t primask = Metrics_CriticalEnter();
+	Metrics_UpdateCycleEpochLocked();
+	value = s_cycle_epoch + (uint64_t) s_last_cycle;
+	Metrics_CriticalExit(primask);
+	return value;
 }
 
 static bool Metrics_IsValidExecId(Metrics_ExecId_t id) {
@@ -108,37 +153,53 @@ static uint16_t Metrics_RatioPermille(uint64_t numerator, uint64_t denominator) 
 }
 
 static void Metrics_UpdateLoadWindow(uint64_t now_cycles) {
-	const uint64_t elapsed_cycles = now_cycles - s_load_window_start_cycles;
 	const uint64_t window_cycles = ((uint64_t) s_core_clock_hz
 			* (uint64_t) METRICS_LOAD_WINDOW_MS) / 1000ULL;
+	Metrics_LoadStats_t next;
+	uint64_t elapsed_cycles;
+	uint64_t busy_cycles;
+	uint32_t primask;
 
-	if ((window_cycles == 0ULL) || (elapsed_cycles < window_cycles)) {
+	if (window_cycles == 0ULL) {
 		return;
 	}
 
-	s_load_stats.current_permille = Metrics_RatioPermille(
-			s_load_window_busy_cycles, elapsed_cycles);
-	if (s_load_stats.current_permille > s_load_stats.max_permille) {
-		s_load_stats.max_permille = s_load_stats.current_permille;
+	/* The busy counter is also updated by Metrics_ExecEnd() in other tasks:
+	 * take a snapshot and restart the window atomically. */
+	primask = Metrics_CriticalEnter();
+	elapsed_cycles = now_cycles - s_load_window_start_cycles;
+	if (elapsed_cycles < window_cycles) {
+		Metrics_CriticalExit(primask);
+		return;
 	}
-
-	s_load_stats.total_busy_cycles = Metrics_SaturatingAddUint64(
-			s_load_stats.total_busy_cycles, s_load_window_busy_cycles);
-	s_load_stats.total_elapsed_cycles = Metrics_SaturatingAddUint64(
-			s_load_stats.total_elapsed_cycles, elapsed_cycles);
-	if (s_load_stats.total_elapsed_cycles != 0ULL) {
-		s_load_stats.average_permille = Metrics_RatioPermille(
-				s_load_stats.total_busy_cycles,
-				s_load_stats.total_elapsed_cycles);
-	}
-	if (s_load_stats.window_count < UINT32_MAX) {
-		s_load_stats.window_count++;
-	}
-
+	busy_cycles = s_load_window_busy_cycles;
 	/* One update per poll, even if the foreground was stalled for multiple
 	 * windows. The measured interval remains explicit in elapsed_cycles. */
 	s_load_window_start_cycles = now_cycles;
 	s_load_window_busy_cycles = 0ULL;
+	next = s_load_stats;
+	Metrics_CriticalExit(primask);
+
+	next.current_permille = Metrics_RatioPermille(busy_cycles, elapsed_cycles);
+	if (next.current_permille > next.max_permille) {
+		next.max_permille = next.current_permille;
+	}
+
+	next.total_busy_cycles = Metrics_SaturatingAddUint64(
+			next.total_busy_cycles, busy_cycles);
+	next.total_elapsed_cycles = Metrics_SaturatingAddUint64(
+			next.total_elapsed_cycles, elapsed_cycles);
+	if (next.total_elapsed_cycles != 0ULL) {
+		next.average_permille = Metrics_RatioPermille(next.total_busy_cycles,
+				next.total_elapsed_cycles);
+	}
+	if (next.window_count < UINT32_MAX) {
+		next.window_count++;
+	}
+
+	primask = Metrics_CriticalEnter();
+	s_load_stats = next;
+	Metrics_CriticalExit(primask);
 }
 
 bool Metrics_ProbeInit(void) {
@@ -215,6 +276,12 @@ bool Metrics_Init(void) {
 	s_event_read = 0U;
 	s_event_write = 0U;
 	s_event_dropped = 0U;
+	s_dwt_anomaly_count = 0U;
+	(void) memset(&s_imu_stats, 0, sizeof(s_imu_stats));
+	s_imu_last_sequence = 0U;
+	s_imu_last_cycles = 0ULL;
+	s_imu_have_last = false;
+	s_imu_first_seen = false;
 	s_initialized = true;
 
 	return true;
@@ -226,10 +293,7 @@ bool Metrics_IsReady(void) {
 
 void Metrics_Poll(void) {
 	if (s_initialized) {
-		uint64_t now_cycles;
-		Metrics_UpdateCycleEpoch();
-		now_cycles = s_cycle_epoch + (uint64_t) s_last_cycle;
-		Metrics_UpdateLoadWindow(now_cycles);
+		Metrics_UpdateLoadWindow(Metrics_ReadCycles64());
 	}
 }
 
@@ -238,8 +302,7 @@ uint64_t Metrics_NowCycles(void) {
 		return 0ULL;
 	}
 
-	Metrics_UpdateCycleEpoch();
-	return s_cycle_epoch + (uint64_t) s_last_cycle;
+	return Metrics_ReadCycles64();
 }
 
 uint64_t Metrics_CyclesToUs(uint64_t cycles) {
@@ -289,7 +352,11 @@ bool Metrics_LoadStatsGet(Metrics_LoadStats_t *stats) {
 		return false;
 	}
 
-	*stats = s_load_stats;
+	{
+		const uint32_t primask = Metrics_CriticalEnter();
+		*stats = s_load_stats;
+		Metrics_CriticalExit(primask);
+	}
 	return true;
 }
 
@@ -304,7 +371,11 @@ bool Metrics_LoopStatsGet(Metrics_Stats_t *stats) {
 		return false;
 	}
 
-	*stats = s_loop_stats;
+	{
+		const uint32_t primask = Metrics_CriticalEnter();
+		*stats = s_loop_stats;
+		Metrics_CriticalExit(primask);
+	}
 	return true;
 }
 
@@ -314,6 +385,8 @@ void Metrics_ExecBegin(Metrics_ExecId_t id, uint32_t period_ms) {
 	uint64_t interval_cycles;
 	uint64_t interval_us;
 	int64_t jitter_us;
+	uint32_t missed_periods = 0U;
+	uint32_t primask;
 	Metrics_ExecStats_t *stats;
 
 	if (!s_initialized || !Metrics_IsValidExecId(id) || s_exec_running[index]) {
@@ -328,6 +401,7 @@ void Metrics_ExecBegin(Metrics_ExecId_t id, uint32_t period_ms) {
 		interval_us = Metrics_CyclesToUs(interval_cycles);
 		jitter_us = (int64_t) interval_us - ((int64_t) period_ms * 1000LL);
 
+		primask = Metrics_CriticalEnter();
 		if ((stats->jitter_count == 0U) || (jitter_us < stats->min_jitter_us)) {
 			stats->min_jitter_us = jitter_us;
 		}
@@ -339,11 +413,32 @@ void Metrics_ExecBegin(Metrics_ExecId_t id, uint32_t period_ms) {
 		if (stats->jitter_count < UINT32_MAX) {
 			stats->jitter_count++;
 		}
+		Metrics_CriticalExit(primask);
+
+#if (METRICS_MISSED_FROM_EXEC_BEGIN != 0U)
+		/* Same definition as AppScheduler_Run() in lab 3: the interval is
+		 * truncated to whole milliseconds, and only an interval longer than
+		 * one period counts: missed = elapsed_ms / period_ms - 1. */
+		{
+			const uint32_t elapsed_ms = (uint32_t) (interval_us / 1000ULL);
+			if (elapsed_ms > period_ms) {
+				missed_periods = (elapsed_ms / period_ms) - 1U;
+			}
+		}
+#endif
 	}
 
 	if (period_ms != 0U) {
 		s_exec_last_start[index] = start_timestamp;
 		s_exec_has_last_start[index] = true;
+	}
+
+	/* Done before the start stamp so that it is not part of the measured
+	 * region (the lab 3 scheduler did the same before Metrics_ExecBegin). */
+	if (missed_periods != 0U) {
+		Metrics_ExecMissedPeriods(id, missed_periods);
+		(void) Metrics_EventPush(METRICS_EVENT_SCHEDULER_MISSED_PERIODS,
+				((index & 0xFFU) << 24U) | (missed_periods & 0x00FFFFFFUL));
 	}
 
 	s_exec_start_cycle[index] = DWT->CYCCNT;
@@ -353,6 +448,8 @@ void Metrics_ExecBegin(Metrics_ExecId_t id, uint32_t period_ms) {
 void Metrics_ExecEnd(Metrics_ExecId_t id) {
 	uint32_t index = (uint32_t) id;
 	uint32_t elapsed;
+	uint32_t primask;
+	Metrics_ExecStats_t *stats;
 
 	if (!s_initialized || !Metrics_IsValidExecId(id)
 			|| !s_exec_running[index]) {
@@ -361,52 +458,61 @@ void Metrics_ExecEnd(Metrics_ExecId_t id) {
 
 	elapsed = (uint32_t) (DWT->CYCCNT - s_exec_start_cycle[index]);
 	s_exec_running[index] = false;
+	stats = &s_exec_stats[index];
+
+	primask = Metrics_CriticalEnter();
 	/* CPU-load numerator counts only instrumented work regions, not the
 	 * scheduler's periodic eligibility checks or super-loop bookkeeping. */
 	s_load_window_busy_cycles = Metrics_SaturatingAddUint64(
 			s_load_window_busy_cycles, (uint64_t) elapsed);
-	if ((s_exec_stats[index].count == 0U)
-			|| (elapsed < s_exec_stats[index].min_cycles)) {
-		s_exec_stats[index].min_cycles = elapsed;
+	if ((stats->count == 0U) || (elapsed < stats->min_cycles)) {
+		stats->min_cycles = elapsed;
 	}
-	if ((s_exec_stats[index].count == 0U)
-			|| (elapsed > s_exec_stats[index].max_cycles)) {
-		s_exec_stats[index].max_cycles = elapsed;
+	if ((stats->count == 0U) || (elapsed > stats->max_cycles)) {
+		stats->max_cycles = elapsed;
 	}
-	s_exec_stats[index].total_cycles += (uint64_t) elapsed;
-	if (s_exec_stats[index].count < UINT32_MAX) {
-		s_exec_stats[index].count++;
+	stats->total_cycles += (uint64_t) elapsed;
+	if (stats->count < UINT32_MAX) {
+		stats->count++;
 	}
+	Metrics_CriticalExit(primask);
 }
 
 void Metrics_ExecMissedPeriods(Metrics_ExecId_t id, uint32_t missed_periods) {
 	uint32_t index = (uint32_t) id;
 	uint32_t remaining;
+	uint32_t primask;
 
 	if (!s_initialized || !Metrics_IsValidExecId(id)
 			|| (missed_periods == 0U)) {
 		return;
 	}
 
+	primask = Metrics_CriticalEnter();
 	remaining = UINT32_MAX - s_exec_stats[index].missed_periods;
 	if (missed_periods > remaining) {
 		s_exec_stats[index].missed_periods = UINT32_MAX;
 	} else {
 		s_exec_stats[index].missed_periods += missed_periods;
 	}
+	Metrics_CriticalExit(primask);
 }
 
 void Metrics_ExecStatsReset(Metrics_ExecId_t id) {
 	uint32_t index = (uint32_t) id;
 
+	uint32_t primask;
+
 	if (!s_initialized || !Metrics_IsValidExecId(id)) {
 		return;
 	}
 
+	primask = Metrics_CriticalEnter();
 	(void) memset(&s_exec_stats[index], 0, sizeof(s_exec_stats[index]));
 	s_exec_running[index] = false;
 	s_exec_last_start[index] = 0ULL;
 	s_exec_has_last_start[index] = false;
+	Metrics_CriticalExit(primask);
 }
 
 bool Metrics_ExecStatsGet(Metrics_ExecId_t id, Metrics_ExecStats_t *stats) {
@@ -416,7 +522,11 @@ bool Metrics_ExecStatsGet(Metrics_ExecId_t id, Metrics_ExecStats_t *stats) {
 		return false;
 	}
 
-	*stats = s_exec_stats[index];
+	{
+		const uint32_t primask = Metrics_CriticalEnter();
+		*stats = s_exec_stats[index];
+		Metrics_CriticalExit(primask);
+	}
 	return true;
 }
 
@@ -430,12 +540,17 @@ const char* Metrics_ExecIdName(Metrics_ExecId_t id) {
 
 bool Metrics_EventPush(uint16_t id, uint32_t argument) {
 	uint32_t slot;
+	uint32_t primask;
+	uint64_t timestamp;
 	Metrics_Event_t *event;
 
 	if (!s_initialized) {
 		return false;
 	}
 
+	timestamp = Metrics_NowCycles();
+
+	primask = Metrics_CriticalEnter();
 	if ((uint32_t) (s_event_write - s_event_read) >= METRICS_EVENT_CAPACITY) {
 		s_event_read++;
 		if (s_event_dropped < UINT32_MAX) {
@@ -448,34 +563,47 @@ bool Metrics_EventPush(uint16_t id, uint32_t argument) {
 	event->id = id;
 	event->reserved = 0U;
 	event->argument = argument;
-	event->timestamp_cycles = Metrics_NowCycles();
+	event->timestamp_cycles = timestamp;
 	s_event_write++;
+	Metrics_CriticalExit(primask);
 
 	return true;
 }
 
 bool Metrics_EventPop(Metrics_Event_t *event) {
 	uint32_t slot;
+	uint32_t primask;
 
-	if ((event == NULL) || !s_initialized || (s_event_read == s_event_write)) {
+	if ((event == NULL) || !s_initialized) {
+		return false;
+	}
+
+	primask = Metrics_CriticalEnter();
+	if (s_event_read == s_event_write) {
+		Metrics_CriticalExit(primask);
 		return false;
 	}
 
 	slot = s_event_read % METRICS_EVENT_CAPACITY;
 	*event = s_events[slot];
 	s_event_read++;
+	Metrics_CriticalExit(primask);
 
 	return true;
 }
 
 void Metrics_EventClear(void) {
 	if (s_initialized) {
+		const uint32_t primask = Metrics_CriticalEnter();
 		s_event_read = s_event_write;
 		s_event_dropped = 0U;
+		Metrics_CriticalExit(primask);
 	}
 }
 
 void Metrics_EventStatusGet(Metrics_EventStatus_t *status) {
+	uint32_t primask;
+
 	if (status == NULL) {
 		return;
 	}
@@ -486,8 +614,10 @@ void Metrics_EventStatusGet(Metrics_EventStatus_t *status) {
 		return;
 	}
 
+	primask = Metrics_CriticalEnter();
 	status->count = (uint32_t) (s_event_write - s_event_read);
 	status->dropped = s_event_dropped;
+	Metrics_CriticalExit(primask);
 }
 
 const char* Metrics_EventIdName(uint16_t id) {
@@ -496,4 +626,94 @@ const char* Metrics_EventIdName(uint16_t id) {
 		return "unknown";
 	}
 	return s_event_names[id];
+}
+
+uint32_t Metrics_DwtAnomalyCountGet(void) {
+	return s_dwt_anomaly_count;
+}
+
+void Metrics_ImuSampleObserve(uint32_t sequence, uint32_t sample_tick_ms,
+		uint32_t period_ms) {
+	uint64_t now_cycles;
+	uint64_t interval_us = 0ULL;
+	uint32_t elapsed_ms = 0U;
+	uint32_t primask;
+	const bool measure = s_imu_have_last && (period_ms != 0U);
+
+	/* sequence == 0: no valid sample yet. Same sequence: no new sample. */
+	if (!s_initialized || (sequence == 0U)
+			|| (s_imu_have_last && (sequence == s_imu_last_sequence))) {
+		return;
+	}
+
+	now_cycles = Metrics_NowCycles();
+
+	/* 64-bit divisions stay outside the critical section. This function is
+	 * the only writer of s_imu_last_cycles and runs in a single task. */
+	if (measure) {
+		interval_us = Metrics_CyclesToUs(now_cycles - s_imu_last_cycles);
+		elapsed_ms = (uint32_t) (interval_us / 1000ULL);
+	}
+
+	primask = Metrics_CriticalEnter();
+	if (!s_imu_first_seen) {
+		s_imu_stats.first_sample_tick_ms = sample_tick_ms;
+		s_imu_first_seen = true;
+	}
+	s_imu_stats.period_ms = period_ms;
+	if (measure) {
+		if ((s_imu_stats.count == 0U)
+				|| (interval_us < s_imu_stats.min_interval_us)) {
+			s_imu_stats.min_interval_us = interval_us;
+		}
+		if ((s_imu_stats.count == 0U)
+				|| (interval_us > s_imu_stats.max_interval_us)) {
+			s_imu_stats.max_interval_us = interval_us;
+		}
+		s_imu_stats.total_interval_us += interval_us;
+		if (s_imu_stats.count < UINT32_MAX) {
+			s_imu_stats.count++;
+		}
+		if (elapsed_ms > period_ms) {
+			const uint32_t missed = (elapsed_ms / period_ms) - 1U;
+			const uint32_t room = UINT32_MAX - s_imu_stats.missed;
+			s_imu_stats.missed += (missed > room) ? room : missed;
+		}
+	}
+	s_imu_last_sequence = sequence;
+	s_imu_last_cycles = now_cycles;
+	s_imu_have_last = true;
+	Metrics_CriticalExit(primask);
+}
+
+bool Metrics_ImuSampleStatsGet(Metrics_ImuSampleStats_t *stats) {
+	uint32_t primask;
+
+	if ((stats == NULL) || !s_initialized) {
+		return false;
+	}
+
+	primask = Metrics_CriticalEnter();
+	*stats = s_imu_stats;
+	Metrics_CriticalExit(primask);
+	return true;
+}
+
+void Metrics_ImuSampleStatsReset(void) {
+	uint32_t primask;
+
+	if (!s_initialized) {
+		return;
+	}
+
+	primask = Metrics_CriticalEnter();
+	{
+		/* The time of the very first sample (boot-time metric) survives. */
+		const uint32_t first_tick = s_imu_stats.first_sample_tick_ms;
+		(void) memset(&s_imu_stats, 0, sizeof(s_imu_stats));
+		s_imu_stats.first_sample_tick_ms = first_tick;
+	}
+	s_imu_have_last = false;
+	s_imu_last_sequence = 0U;
+	Metrics_CriticalExit(primask);
 }

@@ -3,6 +3,7 @@
 #include "app/rtos_sync.h"
 #include "app/app_scheduler.h"
 #include "metrics/metrics.h"
+#include "metrics/metrics_config.h"
 #include "app/app_state.h"
 #include "bsp/diag_uart.h"
 #include "bsp/user_button.h"

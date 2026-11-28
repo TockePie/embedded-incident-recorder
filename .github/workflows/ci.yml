@@ -2,16 +2,16 @@ name: CI Build Check
 on:
   push:
     paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '**/*.pdf'
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.pdf"
   pull_request:
     branches:
       - main
     paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '**/*.pdf'
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.pdf"
 
 jobs:
   build:
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Build Docker toolchain image
         run: docker build -t stm32-build docker/
@@ -42,6 +44,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Host unit tests
         run: make test
